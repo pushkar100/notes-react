@@ -1,4 +1,4 @@
-# React 16.6 (React + Redux + Router)
+# React 16.6 (React + Redux)
 
 [Tutorial Source](https://www.udemy.com/react-redux/learn/)
 
@@ -2375,6 +2375,3 @@ const mapStateToProps = state => {
 
 export default connect(mapStateToProps, { fetchPosts })(PostList);
 ```
-
-## Navigation with React
-
