@@ -14,6 +14,7 @@
   * [getDerivedStateFromProps](#getderivedstatefromprops)
   * [getSnapshotBeforeUpdate](#getsnapshotbeforeupdate)
   * [componentDidCatch](#componentdidcatch)
+  * [getDerivedStateFromError](#getDerivedStateFromError)
   * [Lifecycle visualised](#lifecycle-visualised)
   * [Playground](#playground)
 
@@ -741,7 +742,7 @@ Get Snapshot Before Update
 Component Did Update 
 ```
 
-##getDerivedStateFromError
+## getDerivedStateFromError
 
 This method appears in a component known as "***ErrorBoundary***". It helps us update the state whenever an error is encountered (runtime error that can lead to a crash)
 
