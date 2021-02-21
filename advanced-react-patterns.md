@@ -2,6 +2,22 @@
 
 [Kent C Dodds Course](https://frontendmasters.com/courses/advanced-react-patterns/)
 
+**Table of contents**
+
+- [Advanced React Patterns](#advanced-react-patterns)
+  * [Pattern 1: `setState` object vs updater function](#pattern-1---setstate--object-vs-updater-function)
+  * [Pattern 2: Using compound components](#pattern-2--using-compound-components)
+  * [Pattern 3: Enhancing compound component with `Children.map` and `cloneElement`](#pattern-3--enhancing-compound-component-with--childrenmap--and--cloneelement-)
+  * [Pattern 4: Flexible components with `React.createContext`](#pattern-4--flexible-components-with--reactcreatecontext-)
+  * [Pattern 5: Flexible components with render props](#pattern-5--flexible-components-with-render-props)
+  * [Pattern 6: Prop collections and getters with render props](#pattern-6--prop-collections-and-getters-with-render-props)
+  * [Pattern 7: State initialisers](#pattern-7--state-initialisers)
+  * [Pattern 8: State reducers](#pattern-8--state-reducers)
+  * [Pattern 9: State reducers with change types](#pattern-9--state-reducers-with-change-types)
+  * [Pattern 10: Control props](#pattern-10--control-props)
+  * [Pattern 11: Provider pattern](#pattern-11--provider-pattern)
+  * [Pattern 12: Higher Order Components](#pattern-12--higher-order-components)
+
 ## Pattern 1: `setState` object vs updater function
 
 **We can set state in two ways:**
@@ -45,7 +61,7 @@ In the following example we place `<ToggleMessage>` and `Button` inside `<Toggle
 2. ***Implicitly sharing*** state via the parent component (which controls the children via props). The user (writing the JSX) does not need to know the shared state between these components and hence, does not have to define them as props explicitly
 
 **Note**
-  
+
 You can create function components as ***static properties***! For example:
 
 ```js
@@ -529,6 +545,60 @@ This pattern can be used in place of state reducer pattern. The crux being that 
 
 [Read more here](https://kentcdodds.com/blog/control-props-vs-state-reducers)
 
+With a regular DOM element, you would do the following:
+
+```jsx
+<input value={this.state.inputValue} onChange={this.handleInputChange} />
+```
+
+We can pass in a value and add callbacks to events as listeners. This will give us "control" over input elements. 
+
+With the control props pattern, we would like to do the same with *React components* (& not just HTML input elements) as well.
+
+Control Props are objectively more powerful than state reducers because they allow complete control over state from outside the component. 
+
+Both of these patterns help you expose state management to component consumers and while they have significantly different APIs, they allow much of the same capabilities. 
+
+```jsx
+class Example extends React.Component {
+  state = {on: false, inputValue: 'off'}
+  handleToggle = on => {
+    this.setState({on, inputValue: on ? 'on' : 'off'})
+  }
+  handleChange = ({target: {value}}) => {
+    if (value === 'on') {
+      this.setState({on: true})
+    } else if (value === 'off') {
+      this.setState({on: false})
+    }
+    this.setState({inputValue: value})
+  }
+  render() {
+    const {on} = this.state
+    return (
+      <div>
+        {/*
+          here we're using the `value` control prop
+          exposed by the <input /> component
+        */}
+        <input value={this.state.inputValue} onChange={this.handleChange} />
+        {/*
+          here we're using the `on` control prop
+          exposed by the <Toggle /> component.
+        */}
+        <Toggle on={on} onToggle={this.handleToggle} />
+      </div>
+    )
+  }
+}
+
+<!-- 
+As you can see, I can control the state of the toggle button by changing the text of the input component, and control the state of the input by clicking on the toggle. This is powerful because it allows me to have complete control over the state of these components.
+-->
+```
+
+Control props do come with a cost however. They require that the consumer completely manage state themselves which means the consumer must have a class component with state and change handlers to update that state.
+
 ## Pattern 11: Provider pattern
 
 **Problem: Props drilling**
@@ -569,6 +639,61 @@ Instead of just render props, we can combine it with our context API pattern and
 
 ## Pattern 12: Higher Order Components
 
-They take in a component and return the same component but in an enhanced way! For example, a component that adds some data props to the given component
+They take in a component and return the same component but in an enhanced way! For example, a component that *adds some data props* to the given component
 
 These are, by convention, prefixed with the `with` keyword. Helps us know that they are HOCs.
+
+```jsx
+const EnhancedComponent = higherOrderComponent(WrappedComponent);
+```
+
+An example, we can enhance a header component with user details as follows:
+
+```jsx
+function wrapWithUser(Component) {
+  // information that we don’t want everything to access
+  const secretUserInfo = {
+    name: 'Jack Franklin',
+    favouriteColour: 'blue'
+  };
+
+  // return a newly generated React component
+  // using a functional, stateless component
+  return function(props) {
+    // pass in the user variable as a property, along with
+    // all the other props that we might be given
+    return <Component user={secretUserInfo} {...props} />
+  }
+}
+
+const AppHeader = function(props) {
+  if (props.user) {
+    return <p>Logged in as {props.user.name}</p>;
+  } else {
+    return <p>You need to login</p>;
+  }
+}
+
+const ConnectedAppHeader = wrapWithUser(AppHeader);
+<!-- 
+Utilise the component as follows:
+<ConnectedAppHeader {user, ...props} />
+-->
+```
+
+An example using classes for HOCs:
+
+```jsx
+// Take in a component as argument WrappedComponent
+const higherOrderComponent = (WrappedComponent) => {
+// And return another component
+  class HOC extends React.Component {
+    render() {
+      return <WrappedComponent />;
+    }
+  }
+  return HOC;
+};
+```
+
+By applying principles of functional programming such as pure functions and higher-order components to React, you can create a codebase that’s easier to maintain and work with on a daily basis.
