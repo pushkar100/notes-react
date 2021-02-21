@@ -5,20 +5,20 @@
 **Table of contents**
 
 - [Advanced React Patterns](#advanced-react-patterns)
-  * [Pattern 1: `setState` object vs updater function](#pattern-1---setstate--object-vs-updater-function)
-  * [Pattern 2: Using compound components](#pattern-2--using-compound-components)
-  * [Pattern 3: Enhancing compound component with `Children.map` and `cloneElement`](#pattern-3--enhancing-compound-component-with--childrenmap--and--cloneelement-)
-  * [Pattern 4: Flexible components with `React.createContext`](#pattern-4--flexible-components-with--reactcreatecontext-)
-  * [Pattern 5: Flexible components with render props](#pattern-5--flexible-components-with-render-props)
-  * [Pattern 6: Prop collections and getters with render props](#pattern-6--prop-collections-and-getters-with-render-props)
-  * [Pattern 7: State initialisers](#pattern-7--state-initialisers)
-  * [Pattern 8: State reducers](#pattern-8--state-reducers)
-  * [Pattern 9: State reducers with change types](#pattern-9--state-reducers-with-change-types)
-  * [Pattern 10: Control props](#pattern-10--control-props)
-  * [Pattern 11: Provider pattern](#pattern-11--provider-pattern)
-  * [Pattern 12: Higher Order Components](#pattern-12--higher-order-components)
+  * [`setState` object vs updater function](#-setstate--object-vs-updater-function)
+  * [Using compound components](#using-compound-components)
+  * [Enhancing compound component with `Children.map` and `cloneElement`](#enhancing-compound-component-with--childrenmap--and--cloneelement-)
+  * [Flexible components with `React.createContext`](#flexible-components-with--reactcreatecontext-)
+  * [Flexible components with render props](#flexible-components-with-render-props)
+  * [Prop collections and getters with render props](#prop-collections-and-getters-with-render-props)
+  * [State initialisers](#state-initialisers)
+  * [State reducers](#state-reducers)
+  * [State reducers with change types](#state-reducers-with-change-types)
+  * [Control props](#control-props)
+  * [Provider pattern](#provider-pattern)
+  * [Higher Order Components](#higher-order-components)
 
-## Pattern 1: `setState` object vs updater function
+## `setState` object vs updater function
 
 **We can set state in two ways:**
 
@@ -34,7 +34,7 @@
 
 The `setState` calls can be ***batched*** in React and executed together. If we depend on the current state inside a plain object, it might not be the actual current state (i.e the most updated one) or the state might change while you are executing the `setState`. Therefore, it is not highly predictable. However, when an updater function executes, it receives the current state as a representation of the current state, and not the state itself. Hence, it is safer to use when producing new state from current state
 
-## Pattern 2: Using compound components
+## Using compound components
 
 **When does a React component get complex?**
 
@@ -76,7 +76,7 @@ static Candy = (props) => <div>CANDY! {props.children}</div>
 // A CHILD COMPONENT CANNOT BE REUSED ELSEHWERE AS A STANDALONE COMPONENT.
 ```
 
-## Pattern 3: Enhancing compound component with `Children.map` and `cloneElement`
+## Enhancing compound component with `Children.map` and `cloneElement`
 
 When we create compound components, we can use the `this.props.children` property to access the children components, as an array
 
@@ -114,7 +114,7 @@ render() {
 }
 ```
 
-## Pattern 4: Flexible components with `React.createContext`
+## Flexible components with `React.createContext`
 
 **What if you wanted to pass props to children of your children?** 
 
@@ -193,7 +193,7 @@ Ex: `value={this.state}` over `value={{some:Object, sameAs: state}}`
 
 2. We can get into nesting too many components in our JSX markup because of having to wrap them in providers and consumers. Instead, we can use functional components that wrap them and give them to us (abstracting away the wrapping complexity) and that's how we can reduce the nesting inside our markup. Or, we can try `react-compose` (A 3rd part library)
 
-## Pattern 5: Flexible components with render props
+## Flexible components with render props
 
 **The problem with compound component: Tight coupling**
 
@@ -251,7 +251,7 @@ return (
 
 Use compound components where the child components don't need much control. Use render props when you need fine grained control over what gets passed to your child component
 
-## Pattern 6: Prop collections and getters with render props
+## Prop collections and getters with render props
 
 Sometimes with render props, we might want to supply a collection of props rather than defining them individually. This helps keep code DRY and increases usability
 
@@ -339,7 +339,7 @@ render() {
  </Toggle>
 ```
 
-## Pattern 7: State initialisers
+## State initialisers
 
 This pattern allows us to:
 1. Set an initial state from the props (instead of hardcoding it), and
@@ -378,7 +378,7 @@ class Toggle extends React.Component {
 }
 ```
 
-## Pattern 8: State reducers
+## State reducers
 
 State reducers allow users to be in control over logic based on actions. This is similar to redux.
 
@@ -470,7 +470,7 @@ State reducers help us:
 2. Add restrictions on state changes (ex: Don't change state after 8 tries)
 3. Prevent re-renders if the state has not changed (by returning the same state or `null`)
 
-## Pattern 9: State reducers with change types
+## State reducers with change types
 
 This is the same as state reducers except that we explicitly provide the type of change on the state. This makes it easy for the staterReducer to act on what has changed (instead of figuring out). For example, passing in `type: 'reset'` to a button reset handler that calls setState
 
@@ -537,7 +537,7 @@ toggleStateReducer = (state, changes) => {
 </Toggle>
 ```
 
-## Pattern 10: Control props
+## Control props
 
 This pattern can be used in place of state reducer pattern. The crux being that we want to control or sync the states of the similar child components
 
@@ -599,7 +599,7 @@ As you can see, I can control the state of the toggle button by changing the tex
 
 Control props do come with a cost however. They require that the consumer completely manage state themselves which means the consumer must have a class component with state and change handlers to update that state.
 
-## Pattern 11: Provider pattern
+## Provider pattern
 
 **Problem: Props drilling**
 
@@ -637,7 +637,7 @@ function Usage({
 
 Instead of just render props, we can combine it with our context API pattern and enable a provider-consumer flow.
 
-## Pattern 12: Higher Order Components
+## Higher Order Components
 
 They take in a component and return the same component but in an enhanced way! For example, a component that *adds some data props* to the given component
 
