@@ -1,6 +1,6 @@
 # React Design Patterns & Best Practices
 
-[Book: React Design Patterns and Best Practices - **Bertoli, Michele**](https://www.amazon.com/React-Design-Patterns-Best-Practices-ebook/dp/B01LFAN88E)
+[Book: React Design Patterns and Best Practices 2nd Ed- **Carlos Santana Roldán**](https://www.amazon.in/React-Design-Patterns-Best-Practices-ebook-dp-B07Q85C6VX/dp/B07Q85C6VX/ref=dp_ob_title_def)
 
 ## Declarative programming
 
