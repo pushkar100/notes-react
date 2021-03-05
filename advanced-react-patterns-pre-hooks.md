@@ -1,4 +1,4 @@
-# Advanced React Patterns
+# Advanced React Patterns (Classe based)
 
 [Kent C Dodds Course](https://frontendmasters.com/courses/advanced-react-patterns/)
 
