@@ -109,3 +109,135 @@ export default Greetings;
 2. Reusability: Create custom hooks when you notice a common pattern between your components and would like to extracted & generalized into cleaner and simplified code. You probably don't need a hook if it's going to used by just one component
 3. Separation of concerns and decouples the logic from UI (abstract complexity): Custom hooks can be thought of as headless components - they do stuff but don't really render anything. They return values. Therefore, it is a good idea to build a hook to contain stateful logic that goes beyond just a single `useEffect`/`useState` since a custom hook can encapsulate all this complex logic.
 
+## Compound components
+
+When a component gets bloated, it is a good idea to separate the logic out into smaller components. This helps preserve the Single Responsibility Principle (SRP) as well as improve maintainability.
+
+Another reason to break down a component into more components is **customizability**. The following example shows a `Menu` component that does everything related to displaying the menu items and buttons by itself:
+
+```jsx
+import React, { useState } from "react";
+
+const Menu = ({ hideButtons, menuButtons, menuItems }) => {
+  return (
+    <div>
+      {!hideButtons &&
+        menuButtons.map(({ text, action }) => (
+          <button key={text} onClick={action}>
+            {text}
+          </button>
+        ))}
+      {menuItems.map((text) => (
+        <div key={text}>{text}</div>
+      ))}
+    </div>
+  );
+};
+
+export default Menu;
+```
+
+The component could get bloated in the future but more importantly, it is not customizable. What if we wanted to place the buttons below the items? Even worse, what if in one use case we want the buttons to be above the items and in another, below them? Should we duplicate this component for each different purpose? 
+
+The **compound component pattern** solves this problem!
+- It introduces a *parent-child* relationship where you define a parent and it encloses different child components. We can move the child components around, remove them, or even add some more. Definitely customizable!
+```jsx
+<Parent {...parentProps}>
+    <Child {...childProps} />
+    <Child {...childProps} />
+</Parent>
+```
+- It also makes the code more **readable / understandable** i.e When you look at the JSX, you know how the component is composed and what each one does based on a readable name for the component.
+- The patterns also **avoids props overload** by exposing children to render. The `Menu` component took all the props for the elements it had to render. However, what if we just had a `MenuItem` child component and only that received the `menuItems` prop? Right prop for the right UI component.
+
+An HTML example of this pattern is the following:
+```jsx
+<select>
+  <option value="volvo">Volvo</option>
+  <option value="mercedes">Mercedes</option>
+  <option value="audi">Audi</option>
+</select>
+```
+
+**Implementation**
+- Identify the `children` prop in the parent. Use it in the render.
+- Create a context in the parent component to store shared data, if any
+- Wrap the children in a context provider so that they may access it later
+
+```jsx
+import React, { useState } from "react";
+
+export const MenuContext = React.createContext({ hideButtons: false });
+const Menu = ({ children, hideButtons }) => {
+  return (
+    <MenuContext.Provider value={{ hideButtons }}>
+      {children}
+    </MenuContext.Provider>
+  );
+};
+
+export default Menu;
+```
+
+```jsx
+import React, { useContext } from "react";
+export const MenuButton = ({ text, action }) => {
+  const { hideButtons } = useContext(MenuContext);
+
+  if (hideButtons) {
+    return null;
+  }
+
+  return (
+    <button key={text} onClick={action}>
+      {text}
+    </button>
+  );
+};
+```
+
+```jsx
+import React from "react";
+export const MenuItem = ({ text }) => <div key={text}>{text}</div>;
+```
+
+```jsx
+<Menu hideButtons>
+  <MenuButton text="Exit" action={() => console.log("Exiting")} />
+  <MenuButton text="Settings" action={() => console.log("settings")} />
+  <MenuItem text="News" />
+  <MenuItem text="Serials" />
+  <MenuItem text="Sports" />
+</Menu>
+```
+
+**A matter of preference:** We may even create static properties of the parent component and assign component to them. This approach enables the user to see how the parent is related to a child. It also keeps all related component together. 
+
+We need to export only one component from a module when using this pattern
+
+```jsx
+// ...
+const Menu = () => { /* ... */ }
+// ...
+Menu.Button = () => { /* ... */ }
+Menu.Item = () => { /* ... */ }
+// ...
+export default Menu;
+```
+
+```jsx
+<Menu hideButtons>
+  <Menu.Button text="Exit" action={() => console.log("Exiting")} />
+  <Menu.Button text="Settings" action={() => console.log("settings")} />
+  <Menu.Item text="News" />
+  <Menu.Item text="Serials" />
+  <Menu.Item text="Sports" />
+</Menu>
+```
+
+**Making a compound component even more extensible:** Add a *callback* prop to the parent. This allows us to many any state changes or other invoke other actions that the outside world can listen to! 
+
+```jsx
+<Menu hideButtons onFadeAway={onFadeAway}>{/* ... */}</Menu>
+```
+
