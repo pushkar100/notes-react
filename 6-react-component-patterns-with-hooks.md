@@ -102,3 +102,10 @@ const Greetings = () => {
 export default Greetings;
 ```
 
+**When should we write a custom hook?**
+
+1. When we want to refactor an H.O.C as shown above!
+    - Originally, an H.O.C was used to enhance the functionality of a component. Therefore, we can use a hook to enhance a functional component.
+2. Reusability: Create custom hooks when you notice a common pattern between your components and would like to extracted & generalized into cleaner and simplified code. You probably don't need a hook if it's going to used by just one component
+3. Separation of concerns and decouples the logic from UI (abstract complexity): Custom hooks can be thought of as headless components - they do stuff but don't really render anything. They return values. Therefore, it is a good idea to build a hook to contain stateful logic that goes beyond just a single `useEffect`/`useState` since a custom hook can encapsulate all this complex logic.
+
