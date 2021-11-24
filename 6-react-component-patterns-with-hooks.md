@@ -241,3 +241,103 @@ export default Menu;
 <Menu hideButtons onFadeAway={onFadeAway}>{/* ... */}</Menu>
 ```
 
+## Reusable styles
+
+Sometimes, for **extensibility** & **customizability**, we can provide an API for altering or adding styles to our component
+
+The common methods to add styles are:
+1. Via a class name
+2. Via a style attribute (This is especially helpful if you need to pass in emotion styles or something similar)
+
+Consider the following example:
+
+```jsx
+/* styles.css */
+.btn-default {
+  background: #fff;
+  border: 0;
+  cursor: pointer;
+  box-shadow: 0 1px 1px 1px #000;
+}
+```
+
+```jsx
+// Button.js
+import React from "react";
+import "./styles.css";
+
+export const Button = ({ text, onClick }) => {
+  return (
+    <button key={text} onClick={onClick} className="btn-default">
+      {text}
+    </button>
+  );
+};
+
+export default Button;
+```
+
+```jsx
+// Usage
+<Button  text="click me"  onClick={() =>  console.log("Clicked")} />
+```
+
+**Should we allow the user to change the properties of a component?**
+
+It depends. If you want to enforce a strict style on a component, it is probably not a good idea to not allow this. However, sometimes you may let a user choose from various customizations by the use of a class name. Ex: A class for a particular type of border.
+
+**Tip:** To import a stylesheet into a *variable* to tap into the styles, use a CSS module. Ex: `styles.module.css` and `import ButtonStyles from 'styles.module.css`. With these two changes, you can use `ButtonStyles.btn` or `ButtonStyles['btn']` where `.btn` is a css class declaration.
+
+If you really want to enable custom styles (`style` attribute) to be passed in (such as CSS properties or emotion styles) then you may also expose a prop for the same.
+
+Both the options are shown in the below example:
+
+```css
+/* styles.module.css */
+.btn {
+  background: #fff;
+  border: 0;
+  cursor: pointer;
+  box-shadow: 0 1px 1px 1px #000;
+}
+
+.btn-border-blue {
+  border: 1px solid blue;
+}
+
+.btn-border-teal {
+  border: 1px solid teal;
+}
+```
+
+```jsx
+// Button.js
+import React from "react";
+import ButtonStyles from "./styles.module.css";
+
+export const Button = ({ text, onClick, classes = [], styles }) => {
+  const classNames = [ButtonStyles["btn"], ...classes].join(" ");
+
+  return (
+    <button key={text} onClick={onClick} className={classNames} style={styles}>
+      {text}
+    </button>
+  );
+};
+
+export default Button;
+```
+
+```jsx
+// Usage
+import  ButtonStyles  from  "./styles.module.css";
+// ...
+<button key={text} onClick={onClick} className={classNames} style={styles}>
+  {text}
+</button>
+```
+
+> Note that using a `.module.css` is optional. You can always just use a plain `.css` stylesheet and use strings for class names!
+
+
+
