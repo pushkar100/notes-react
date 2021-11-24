@@ -339,5 +339,93 @@ import  ButtonStyles  from  "./styles.module.css";
 
 > Note that using a `.module.css` is optional. You can always just use a plain `.css` stylesheet and use strings for class names!
 
+## Control props
+
+This is a very **powerful pattern** even though it looks simple. The objective is to *control the state of the child components* from a parent. In order to do this:
+1. We need to *expose a prop* from the child to the parent that enables this control
+2. To change the values supplied to this prop, the parent has to be *stateful*!
+    - If not, then changes in the parent do not update the children
+4. *Optional:* You may also want to expose a callback to the parent in order to give it data that helps change the value of the control prop.
+
+The most common example of a control prop is that of an input element in react:
+```jsx
+const [value, setValue] = useState('');
+//...
+<input value={value} onChange={(e) => setValue(e.target.value)} />
+```
+The above pattern is for controlling DOM elements, specifically the HTML form elements. What about controlling components we build? We can do the same for them as well.
+
+**When should we use control props on components?**
+
+1. When we want to **synchronize** data between and instruction to different components.
+2. When we want to give **absolute control** over a component to the parent / consumer.
+
+Imagine a scenario where two buttons increment and decrement a counter. If they are not synchronised, they will be running two counters independent of each other:
+
+```jsx
+export const IncrementButton = ({ text }) => {
+  const [count, setCount] = useState(0);
+  const onClick = () => setCount(count + 1);
+
+  return (
+    <button key={text} onClick={onClick}>
+      {text} ({count})
+    </button>
+  );
+};
+
+export const DecrementButton = ({ text }) => {
+  const [count, setCount] = useState(0);
+  const onClick = () => setCount(count - 1);
+
+  return (
+    <button key={text} onClick={onClick}>
+      {text} ({count})
+    </button>
+  );
+};
+
+const Counter = () => {
+  return (
+    <div>
+      <IncrementButton text="+" />
+      <DecrementButton text="-" />
+    </div>
+  );
+};
+```
+
+We can use control props to synchronise them: The parent will have a state for the counter and pass the values down. The children will invoke a callback on click to allow parent to update the count value. In this way, both the buttons will have the same counter value i.e as expected.
+
+```jsx
+export const IncrementButton = ({ text, count, onIncrement }) => (
+  <button key={text} onClick={onIncrement}>
+    {text} ({count})
+  </button>
+);
+
+export const DecrementButton = ({ text, count, onDecrement }) => (
+  <button key={text} onClick={onDecrement}>
+    {text} ({count})
+  </button>
+);
+
+const Counter = () => {
+  const [count, setCount] = useState(0); // Lifted state into the parent
+  const onIncrement = () => setCount(count + 1);
+  const onDecrement = () => setCount(count - 1);
+
+  return (
+    <div>
+      <IncrementButton text="+" count={count} onIncrement={onIncrement} />
+      <DecrementButton text="-" count={count} onDecrement={onDecrement} />
+    </div>
+  );
+};
+```
+
+`count` was the state value that was moved up into `Counter`. The control prop exposed by the buttons was `count` and the callbacks that helped update the count's state were `onIncrement` and `onDecrement`.
+
+You might not always need callbacks as the state can update from outside the children too. In this example,m the callbacks were, in fact, needed.
 
 
