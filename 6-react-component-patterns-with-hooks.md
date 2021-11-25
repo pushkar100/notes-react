@@ -428,4 +428,133 @@ const Counter = () => {
 
 You might not always need callbacks as the state can update from outside the children too. In this example,m the callbacks were, in fact, needed.
 
+## Props collection
 
+When you know that there are certain props that are likely to be supplied by a user of a component, we can group them and pre-define them as a collection that the user can then pass in as a single prop.
+
+Consider this example:
+```jsx
+<SomeComponent prop1={1} prop2={2} prop3={3} uniquePropA />
+<SomeComponent prop1={1} prop2={2} prop3={3} uniquePropB />
+```
+Like in the example above, do you have a case where you constantly find yourself passing in the same, multiple props to the component whenever you instantiate it? What if you need to render it multiple times? In such a scenario, it helps to group these props into just one prop and pass that prop in as shown below:
+
+```jsx
+const collection = { prop1: 1, prop2: 2, prop3: 3 }
+// ...
+<SomeComponent collection uniquePropA />
+<SomeComponent collection uniquePropB />
+```
+
+It is a very useful pattern when:
+1. You need to use the same set of props every time
+2. When the prop values are the same every time you use them (which is why having a collections object that has defined them makes sense)
+
+The perfect example of a good place to use this pattern is when passing **accessibility** props (`aria-*`). All semantic HTML elements need this and depending on the type of element, many aria attributes can be the same.
+
+```jsx
+import React from "react";
+
+const Button = ({ text, onClick, tabIndex, ariaDisabled }) => {
+  return (
+    <button 
+	    onClick={onClick} 
+	    tabIndex={tabIndex} 
+	    role="button" 
+	    aria-disabled={ariaDisabled} 
+	>
+      {text}
+    </button>
+  );
+};
+
+export default Button;
+```
+
+```jsx
+// usage
+<Button
+  text="send"
+  onClick={() => console.log("Clicked")}
+  role="button"
+  tabIndex={0}
+  ariaDisabled="false"
+/>
+<Button
+  text="open"
+  onClick={() => console.log("Clicked")}
+  role="button"
+  tabIndex={1}
+  ariaDisabled="false"
+/>
+```
+
+We can use the *props collection* pattern to make this component easier to work with by supplying a single prop for all the accessibility declarations:
+
+```jsx
+const buttonAriaPropCollection = {
+  tabIndex: 0,
+  role: "button",
+  "aria-disabled": false
+};
+```
+
+```jsx
+const Button = ({ text, onClick, tabIndex, role, 'aria-disabled': ariaDisabled }) => {
+  return (
+    <button onClick={onClick} tabIndex={tabIndex} role={role} aria-disabled={ariaDisabled}>
+      {text}
+    </button>
+  );
+};
+```
+
+```jsx
+<Button
+  text="click me"
+  onClick={() => console.log("Clicked")}
+  {...buttonAriaPropCollection}
+/>
+```
+
+## Props getter 
+
+This pattern is exactly the same as a props collection method but it allows for some **flexibility**. What if for one of the buttons, you want to change one of the accessibility props from the collection? A props collection does not let you do that but a props getter can!
+
+- It allows us to override some props from the collection with our own i.e the user's 
+- We define a function that returns an object of props instead of just an object containing props
+- The arguments to the functions will define the override of certain props
+- For methods, we probably want to invoke additional methods defined & NOT override the default. For this purpose, creating a helper function that invokes the default as well as the passed in functions is useful.
+
+```jsx
+const logClick = () => console.log("button clicked");
+```
+
+```jsx
+const callAll = (...fns) => (...args) => fns.forEach((fn) => fn(...args));
+```
+
+```jsx
+export const buttonPropsGetter = ({ customOnClick, ...props }) => ({
+  onClick: callAll(logClick, customOnClick),
+  tabIndex: 0,
+  role: "button",
+  "aria-disabled": false,
+  text: "Button",
+  ...props // The overrides
+});
+
+const Button = ({ text, buttonProps }) => {
+  return <button {...buttonProps}>{text}</button>;
+};
+```
+
+```jsx
+// Usage:
+<Button
+  {...buttonPropsGetter({
+    customOnClick: () => console.log("Sent email"),
+    text: "Send"
+  })}
+/>
+```
