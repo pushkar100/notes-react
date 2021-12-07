@@ -2,6 +2,8 @@
 
 [Course link](https://www.udemy.com/course/the-complete-guide-to-advanced-react-patterns)
 
+[Article](https://kentcdodds.com/blog/control-props-vs-state-reducers)
+
 ## Using custom hooks
 
 Hooks are better than classes. Here's why:
