@@ -581,7 +581,7 @@ If you need both logic & presentation, you can combine hooks with simple or comp
 2. ***Does it make sense to group props?*** (or) ***Are we going to reuse a set of props together or multiple times?***
 	- Use the **Prop Collections** or **Prop Getters** pattern. Use the latter if you need to be able to customize the set of props.
 3. ***Are we handling multiple state elements?*** (or) ***Do we want to give the user of the component more control?***
-	- Use the **State Reducer** pattern
+	- Use the **State Reducer** pattern. If we do not want to give control to the user of the component but we still have many state elements for it, a simple `useReducer` should suffice
 	- If the parent can manage *state* as well as *event handlers* (Ex: for input elements) we could also use **control props**
 4. ***Should we allow the user to override the default styles of the component?***
 	- Use the **Reusable Styles** pattern
