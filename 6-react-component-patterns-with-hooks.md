@@ -561,6 +561,186 @@ const Button = ({ text, buttonProps }) => {
 />
 ```
 
+## State reducers
+
+This pattern has a goal similar to that of control props. That is, it gives more control to the user of the component. Both are based on the *Inversion of Control* principle.
+
+For components with just a prop and an event handler, a control prop pattern where the parent maintains the state and the event handler method is sufficient. An input element that is controlled is an example of this.
+
+What happens when the control mechanism gets more complicated? What if we use control props but are faced with the problem of multiple props & multiple event handlers to manage. It gets too complicated: The user of the component needs to *manage the entire state of the child component*. This is a *drawback* of control props.
+
+State reducer pattern allows us to do what control props did but by using a reducer function:
+1. Easier to manage 
+2. Has the benefit of the user not having to manage the entire state for the child
+	- Instruction based (Provide actions similar to redux)
+3. Can pass in a custom reducer when needed!
+	- Built in such a way that it overrides the state change from the default reducer *only when needed*
+
+### Implementation using hooks
+
+1. Utilize a `useReducer` in your component
+2. Keep a default reducer function
+3. Build a custom reducer in such a way that it overrides the default reducer in required scenarios
+
+A simple example with 3 elements:
+- A controlled div that toggles the text 'on' & 'off' on clicking itself
+- A button to 'switch on' the div
+- Another button to 'switch off' the div
+
+```jsx
+function useToggle() {
+  const [on, setOnState] = React.useState(false);
+
+  const toggle = () => setOnState((o) => !o);
+  const setOn = () => setOnState(true);
+  const setOff = () => setOnState(false);
+
+  return { on, toggle, setOn, setOff };
+}
+```
+```jsx
+function Toggle() {
+  const { on, toggle, setOn, setOff } = useToggle();
+
+  return (
+    <div>
+      <button onClick={setOff}>Disable</button>
+      <button onClick={setOn}>Enable</button>
+      <div onClick={toggle}>
+        {on ?  "On"  :  "off"}
+      </div>
+    </div>
+  );
+}
+```
+```jsx
+// usage
+<Toggle />
+```
+
+What if a new requirement comes in like so:
+> Allow the user to toggle the div's on/off status a maximum of 4 times by clicking on it. After 4 clicks, only the buttons have the ability to change the div's status
+
+In such a scenario, we can go ahead and edit `useToggle` to include this logic. However, it is not very good for composability. What if there are other components that do not want to `useToggle` to change its original logic? 
+
+A better solution is to use the State Reducer pattern. We can give the control of the state to the user of the component while maintaining a default reducer
+
+*The component we are trying to apply this pattern on here is actually the hook, **`useToggle`***
+
+**Step 1**: Change the `useToggle` hook to use a reducer
+
+```jsx
+const actionTypes = {
+  on: "on",
+  off: "off",
+  toggle: "toggle"
+};
+
+const toggleReducer = (state, action) => {
+  switch (action.type) {
+    case actionTypes.on:
+      return { on: true };
+    case actionTypes.off:
+      return { on: false };
+    case actionTypes.toggle:
+      return { on: !state.on };
+    default:
+      return state;
+  }
+};
+
+function useToggle() {
+  const [{ on }, dispatch] = React.useReducer(toggleReducer, { on: false });
+
+  const toggle = () => dispatch({ type: actionTypes.toggle });
+  const setOn = () => dispatch({ type: actionTypes.on });
+  const setOff = () => dispatch({ type: actionTypes.off });
+
+  return { on, toggle, setOn, setOff };
+}
+
+function Toggle() {
+  const { on, toggle, setOn, setOff } = useToggle();
+
+  return (
+    <div>
+      <button onClick={setOff}>Disable</button>
+      <button onClick={setOn}>Enable</button>
+      <div onClick={toggle}>
+        {on ?  "On"  :  "off"}
+      </div>
+    </div>
+  );
+}
+```
+
+**Step 2**: Allow users to define a custom reducer that overrides the default one
+
+```jsx
+const actionTypes = {
+  on: "on",
+  off: "off",
+  toggle: "toggle"
+};
+
+const toggleReducer = (state, action) => {
+  switch (action.type) {
+    case actionTypes.on:
+      return { on: true };
+    case actionTypes.off:
+      return { on: false };
+    case actionTypes.toggle:
+      return { on: !state.on };
+    default:
+      return state;
+  }
+};
+
+function useToggle(reducer = toggleReducer) {
+  const [{ on }, dispatch] = React.useReducer(reducer, { on: false });
+
+  const toggle = () => dispatch({ type: actionTypes.toggle });
+  const setOn = () => dispatch({ type: actionTypes.on });
+  const setOff = () => dispatch({ type: actionTypes.off });
+
+  return { on, toggle, setOn, setOff };
+}
+
+function Toggle() {
+  const [clicks, setClicks] = React.useState(0);
+  const tooManyClicks = clicks > 4;
+
+  const { on, toggle, setOn, setOff } = useToggle((state, action) => {
+    const defaultChanges = toggleReducer(state, action);
+
+    if (tooManyClicks && action.type === actionTypes.toggle) {
+      return { ...defaultChanges, on: state.on };
+    }
+
+    return defaultChanges;
+  });
+
+  return (
+    <div>
+      <button onClick={setOff}>Disable</button>
+      <button onClick={setOn}>Enable</button>
+      <div
+        onClick={() => {
+          toggle();
+          setClicks((clicks) => clicks + 1);
+        }}
+      >
+        {on ? "On" : "off"}
+      </div>
+    </div>
+  );
+}
+```
+
+Therefore, state reducers:
+- Are better than control props for inverting control of state
+- Allow the user to manage only the state updation that needs to be different from the default updation flow
+
 ## Which pattern to use when?
 
 ### Basic decision-making
