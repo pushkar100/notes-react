@@ -1,10 +1,6 @@
 # React component patterns with hooks
 
-[Course link](https://www.udemy.com/course/the-complete-guide-to-advanced-react-patterns)
-
-[Article](https://kentcdodds.com/blog/control-props-vs-state-reducers)
-
-[Article](https://kentcdodds.com/blog/the-state-initializer-pattern)
+[Course link](https://www.udemy.com/course/the-complete-guide-to-advanced-react-patterns) | [Article: State reducer](https://kentcdodds.com/blog/control-props-vs-state-reducers) | [Article: State initalizer](https://kentcdodds.com/blog/the-state-initializer-pattern)
 
 ## Using custom hooks
 
