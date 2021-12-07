@@ -4,6 +4,8 @@
 
 [Article](https://kentcdodds.com/blog/control-props-vs-state-reducers)
 
+[Article](https://kentcdodds.com/blog/the-state-initializer-pattern)
+
 ## Using custom hooks
 
 Hooks are better than classes. Here's why:
