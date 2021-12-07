@@ -582,7 +582,7 @@ If you need both logic & presentation, you can combine hooks with simple or comp
 	- It is a good idea to use the **state initializer pattern**
 2. ***Does it make sense to group props?*** (or) ***Are we going to reuse a set of props together or multiple times?***
 	- Use the **Prop Collections** or **Prop Getters** pattern. Use the latter if you need to be able to customize the set of props.
-3. ***Are we handling multiple state elements?*** (or) ***Do we want to update only certain parts of a complex component state?*** (or) ***Do we want to instruct a component with actions similar to redux?***
+3. ***Are we handling multiple state elements?*** (or) ***Do we want to give the user of the component more control?***
 	- Use the **State Reducer** pattern
 4. ***Should we allow the user to override the default styles of the component?***
 	- Use the **Reusable Styles** pattern
