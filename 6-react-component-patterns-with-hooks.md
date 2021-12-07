@@ -558,3 +558,31 @@ const Button = ({ text, buttonProps }) => {
   })}
 />
 ```
+
+## Which pattern to use when?
+
+### Basic decision-making
+
+1. ***Are we adding pure logic?***
+	- Use a **custom hook**!
+	- Reason: A hook is meant to enhance the functionality of a component without rendering anything itself. It is also just a simple function
+	- Examples: Adding logging mechanism, detecting copy paste, providing context (use `useContext`), fetching data from/dispatching action to redux (`useSelector`, `useDispatch`), making ajax requests, etc.
+2. ***Are we building components purely for rendering purposes?***
+	- ***Do the components have a parent-child relationship?***
+		- If ***yes***, use the **Compound Components pattern**
+			- Reasons: Avoids bloated components & prop drilling. Better for composability.
+		- If ***no***, use simple components (**no pattern**)
+			- If a single component is too bloated, split them out into more reusable components that do not have a parent-child relationship.
+
+If you need both logic & presentation, you can combine hooks with simple or compound components i.e build hooks that will be used by a component/compound set of components.
+
+### Further decision-making
+
+1. ***Do we need to reset state?***
+	- It is a good idea to use the **state initializer pattern**
+2. ***Does it make sense to group props?*** (or) ***Are we going to reuse a set of props together or multiple times?***
+	- Use the **Prop Collections** or **Prop Getters** pattern. Use the latter if you need to be able to customize the set of props.
+3. ***Are we handling multiple state elements?*** (or) ***Do we want to update only certain parts of a complex component state?*** (or) ***Do we want to instruct a component with actions similar to redux?***
+	- Use the **State Reducer** pattern
+4. ***Should we allow the user to override the default styles of the component?***
+	- Use the **Reusable Styles** pattern
