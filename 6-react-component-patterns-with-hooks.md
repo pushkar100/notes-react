@@ -564,15 +564,11 @@ const Button = ({ text, buttonProps }) => {
 ### Basic decision-making
 
 1. ***Are we adding pure logic?***
-	- Use a **custom hook**!
-	- Reason: A hook is meant to enhance the functionality of a component without rendering anything itself. It is also just a simple function
-	- Examples: Adding logging mechanism, detecting copy paste, providing context (use `useContext`), fetching data from/dispatching action to redux (`useSelector`, `useDispatch`), making ajax requests, etc.
+	- Use a **custom hook**! Examples include adding logging mechanism, detecting copy paste, providing context (use `useContext`), fetching data from/dispatching action to redux (`useSelector`, `useDispatch`), making ajax requests, etc.
 2. ***Are we building components purely for rendering purposes?***
 	- ***Do the components have a parent-child relationship?***
-		- If ***yes***, use the **Compound Components pattern**
-			- Reasons: Avoids bloated components & prop drilling. Better for composability.
-		- If ***no***, use simple components (**no pattern**)
-			- If a single component is too bloated, split them out into more reusable components that do not have a parent-child relationship.
+		- If ***yes***, use the **Compound Components pattern**. It avoids bloated components & prop drilling. Better for composability.
+		- If ***no***, use simple components (**no pattern**). If a single component is too bloated, split them out into more reusable components that do not have a parent-child relationship.
 
 If you need both logic & presentation, you can combine hooks with simple or compound components i.e build hooks that will be used by a component/compound set of components.
 
