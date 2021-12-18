@@ -4,6 +4,8 @@
 
 - [React component patterns with hooks](#react-component-patterns-with-hooks)
   * [Using custom hooks](#using-custom-hooks)
+    + [Container Presenter vs Custom Hooks](#container-presenter-vs-custom-hooks)
+    + [Render props vs Custom hooks](#render-props-vs-custom-hooks)
   * [Compound components](#compound-components)
   * [Reusable styles](#reusable-styles)
   * [Control props](#control-props)
@@ -131,6 +133,10 @@ How do custom hooks affect the **"Container-Presenter"** pattern which also deal
 3. Hooks will not introduce a prop for the dumb (presenter) component like a container supplying data to its children would!
 
 There maybe one reason to use the container-presenter pattern though! If you want to have a clear separation of concerns i.e you insist on keeping more dumb components over ones that rely on a hook.
+
+### Render props vs Custom hooks
+
+Render props allow us to pass in a function as a child so that it may receive props without knowing the children it is rendering. It is an alternative to compound components when you do not want to couple the child components to the parent. It is also useful because it is a way of extracting out logic. For the most part, custom hooks do the same thing i.e handle logic and the context API might be better for supplying data to the children without coupling components (Provider-Consumer pattern). Therefore, there are not that many use-cases for render props right now.
 
 ## Compound components
 
