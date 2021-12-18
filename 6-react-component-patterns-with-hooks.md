@@ -739,6 +739,107 @@ Therefore, state reducers:
 - Are better than control props for inverting control of state
 - Allow the user to manage only the state updation that needs to be different from the default updation flow
 
+## State initializer
+
+This pattern is useful when you want to:
+- **Set** an initial state (default state), and
+- **Reset** to default state
+
+Depending on how reusable your component or hook needs to be, a configurable state makes sense. This is why providing the user the opportunity to set an initial state is a good idea i.e makes it more reusable.
+
+There are many cases where a lot of changes occur in the state and at some point, we might want to bring it back to the initial configuration. That is where resetting helps. The reset functionality should also **clean up any side-effects** that need to be addressed during a reset.
+
+Consider an example:
+```jsx
+const useCounter = () => {
+  const [count, setCount] = useState(0);
+
+  return {
+    count,
+    setCount
+  }
+}
+```
+The code is fine except that if we wanted to pass an initial state, we cannot. It always starts from `0`. What if we wanted it to be flexible? Let's fix that! Send a prop to set the initial state.
+
+```jsx
+const useCounter = (initialCount = 0) => {
+  const [count, setCount] = useState(initialCount);
+
+  return {
+    count,
+    setCount
+  };
+};
+```
+
+We still cannot reset the state. Expose a reset function that will reset the count to the initial state.
+
+```jsx
+const useCounter = (initialCount = 0) => {
+  const [count, setCount] = useState(initialCount);
+
+  const resetCount = useCallback(() => {
+    setCount(initialCount);
+  }, [initialCount]); // Function reference changes only when initial count changes
+
+  return {
+    count,
+    setCount,
+    resetCount
+  };
+};
+```
+
+Good! What about any side-effects that ran on a reset? For example, if we had to keep a count of resets themselves? Currently, there is no provision for that! Add the logic...
+
+```jsx
+import { useCallback, useRef, useState } from "react";
+
+const useCounter = (initialCount = 0) => {
+  const [count, setCount] = useState(initialCount);
+  const numResets = useRef(0); // To hold any mutable value
+  // Coz it won't change on re-renders
+
+  const resetCount = useCallback(() => {
+    setCount(initialCount);
+    numResets.current++; // Side effect
+  }, [initialCount]);
+
+  return {
+    count,
+    setCount,
+    resetCount,
+    numResets: numResets.current
+  };
+};
+
+export default useCounter;
+```
+
+**Note**: You may also use a `useEffect` for side effects but the problem is that all effects run at least once on mount, something we definitely don't want happening in this example. We can add an if condition within the `useEffect` to check for mount. 
+
+Example usage:
+```jsx
+const App = () => {
+  const { count, setCount, resetCount, numResets } = useCounter(5);
+
+  return (
+    <>
+      <div>Count: {count}</div>
+      <div>Number of resets: {numResets}</div>
+      <button onClick={() => setCount(count + 1)}>Increase count</button>
+      <button onClick={resetCount}>Reset count</button>
+    </>
+  );
+};
+```
+
+Therefore, state initialisers are good for:
+1. Configuring an initial state from the outside (flexible)
+2. Resetting the state at any point to the initial state
+3. Running any side-effects on the reset
+
 ## Which pattern to use when?
 
 ### Basic decision-making
