@@ -2,6 +2,20 @@
 
 [Course link](https://www.udemy.com/course/the-complete-guide-to-advanced-react-patterns) | [Article: State reducer](https://kentcdodds.com/blog/control-props-vs-state-reducers) | [Article: State initalizer](https://kentcdodds.com/blog/the-state-initializer-pattern)
 
+- [React component patterns with hooks](#react-component-patterns-with-hooks)
+  * [Using custom hooks](#using-custom-hooks)
+  * [Compound components](#compound-components)
+  * [Reusable styles](#reusable-styles)
+  * [Control props](#control-props)
+  * [Props collection](#props-collection)
+  * [Props getter](#props-getter)
+  * [State reducers](#state-reducers)
+    + [Implementation using hooks](#implementation-using-hooks)
+  * [State initializer](#state-initializer)
+  * [Which pattern to use when?](#which-pattern-to-use-when-)
+    + [Basic decision-making](#basic-decision-making)
+    + [Further decision-making](#further-decision-making)
+
 ## Using custom hooks
 
 Hooks are better than classes. Here's why:
