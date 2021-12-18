@@ -109,6 +109,13 @@ export default Greetings;
 2. Reusability: Create custom hooks when you notice a common pattern between your components and would like to extracted & generalized into cleaner and simplified code. You probably don't need a hook if it's going to used by just one component
 3. Separation of concerns and decouples the logic from UI (abstract complexity): Custom hooks can be thought of as headless components - they do stuff but don't really render anything. They return values. Therefore, it is a good idea to build a hook to contain stateful logic that goes beyond just a single `useEffect`/`useState` since a custom hook can encapsulate all this complex logic.
 
+**Note:** What about **"Container-Presenter"** pattern? It is a pattern used to separate logic (Ex: data fetching) from presentation. It is conceptually similar to a custom hook. However, in this pattern, we use 2 components: one for logic and one for display (a dumb component). In the case of a custom hook, it serves the same purpose of the logic component. The following are the reasons to use a custom hook over the container-presenter pattern:
+1. Hooks use fewer components. There will be less nesting in the DOM tree as well
+2. Hooks are easy to plug & play inside a component since they are just functions!
+3. Hooks will not introduce a prop for the dumb (presenter) component like a container supplying data to its children would!
+
+There maybe one reason to use the container-presenter pattern though! If you want to have a clear separation of concerns i.e you insist on keeping more dumb components over ones that rely on a hook.
+
 ## Compound components
 
 When a component gets bloated, it is a good idea to separate the logic out into smaller components. This helps preserve the Single Responsibility Principle (SRP) as well as improve maintainability.
