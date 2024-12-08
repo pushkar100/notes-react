@@ -14,7 +14,8 @@ Color theme, user details, language preferences, cart status in e-commerce appli
 
 ## Implementation
 
-1. Create the context (React.createContext)
+1. Create the context (`React.createContext`)
+2. Provide the context (Wrap with a `<context>.Provider` component and provide a value attribute)
 
 ```typescript
 type Theme = 'light' | 'dark';
@@ -45,8 +46,34 @@ const ThemeProvider = ({ children }: ThemeProviderProps) => {
 };
 ```
 
-2. Provide the context (Wrap with a <context>.Provider component and provide a value attribute)
 3. Consume the context (useContext)
+
+```typescript
+function App() {
+  return (
+    <>
+      <ThemeProvider>
+        <MyButton />
+    </>
+  );
+}
+
+const MyButton = () => {
+  const { theme, toggleTheme } = useContext(themeContext) as ThemeContext;
+
+  const styles = {
+    light: { color: 'black', background: 'white', cursor: 'pointer' },
+    dark: { color: 'white', background: 'black', cursor: 'pointer' },
+  };
+
+  return (
+    <button style={styles[theme]} onClick={toggleTheme}>
+      Toggle theme! Number of renders = {renderRef.current}
+    </button>
+  );
+};
+
+```
 
 ## Problems with the Context API
 
