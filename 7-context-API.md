@@ -89,8 +89,8 @@ Bottom-line: Use redux for global state with high frequency changes. For low fre
 
 ## Improving the performance of Context API
 
-1. Functions as context properties: Make sure they are wrapped in a useCallback() so that their reference does not change unnecessarily. For components consuming the context, they re-render even when the ancestor with the provider re-renders since it causes the context value to be updated and even if nothing changes, the function reference changes (if not using useCallback()).
-2. Wrap the context object in a useMemo: This is just an additional step to make sure the context object is only computer once and it does not change unless the dependencies we have mentioned in the useMemo does not change! i.e explicitly defining what changes should trigger the context object changes 
+1. Functions as context properties: Make sure they are wrapped in a `useCallback()` so that their reference does not change unnecessarily. For components consuming the context, they re-render even when the ancestor with the provider re-renders since it causes the context value to be updated and even if nothing changes, the function reference changes (if not using useCallback()).
+2. Wrap the context object in a `useMemo()`: This is just an additional step to make sure the context object is only computer once and it does not change unless the dependencies we have mentioned in the useMemo does not change! i.e explicitly defining what changes should trigger the context object changes 
 
 (Note: if there are many function and other properties of the context that we cannot guarantee will not update unnecessarily or that their references (Ex: function) will not change without good reason, it is probably time to split your context further!)
 
