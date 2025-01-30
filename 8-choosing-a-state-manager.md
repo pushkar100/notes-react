@@ -1,5 +1,27 @@
 # React state management
 
+- [React state management](#react-state-management)
+   * [TLDR](#tldr)
+   * [Comparing Redux with MobX](#comparing-redux-with-mobx)
+      + [Redux](#redux)
+         - [Pros](#pros)
+         - [Cons](#cons)
+      + [MobX](#mobx)
+         - [Pros](#pros-1)
+         - [Cons](#cons-1)
+      + [Why MobX cannot scale like Redux?](#why-mobx-cannot-scale-like-redux)
+      + [Conclusion: When to Use Which?](#conclusion-when-to-use-which)
+      + [Bundle sizes](#bundle-sizes)
+   * [Comparing Zustand with Redux](#comparing-zustand-with-redux)
+      + [Zustand benefits](#zustand-benefits)
+      + [Drawbacks of Zustand](#drawbacks-of-zustand)
+      + [How is Zustand scalable?](#how-is-zustand-scalable)
+      + [Conclusion](#conclusion)
+   * [Comparing Jotai with Redux](#comparing-jotai-with-redux)
+      + [Differences with Redux](#differences-with-redux)
+      + [Redux is still better than Jotai for large scale apps](#redux-is-still-better-than-jotai-for-large-scale-apps)
+   * [Comparing Xstate with Redux ](#comparing-xstate-with-redux)
+
 Types of *client state*:
 1. Local state (Ex: `useState`)
 2. Global state (Ex: `useContext`)
