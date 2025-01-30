@@ -10,7 +10,7 @@ Types of *client state*:
 
 [Source](https://www.youtube.com/watch?v=8hi3lbkR0GI)
 
-[Selection flowchart for react sstate management libraries](https://i.imgur.com/8mk2oAd.png)
+![Selection flowchart for react sstate management libraries](https://i.imgur.com/8mk2oAd.png)
 
 Tips:
 * Start with the simplest libraries
