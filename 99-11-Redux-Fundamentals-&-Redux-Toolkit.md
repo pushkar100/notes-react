@@ -31,6 +31,8 @@
     - [7. When to Use It and When Not To](#7-when-to-use-it-and-when-not-to)
     - [8. Tricky Concepts & Gotchas](#8-tricky-concepts-gotchas)
     - [9. Common Interview Questions](#9-common-interview-questions)
+  - [Installation](#installation)
+    - [What are you installing?](#what-are-you-installing)
 
 ## Redux fundamentals
 
@@ -615,3 +617,35 @@ export const selectActiveUsers = createSelector(
   }
 );
 ```
+
+## Installation
+
+To install Redux and Redux Toolkit for a React project, you need to install two specific packages.
+
+Run one of the following commands in your terminal, depending on your package manager:
+
+**Using npm:**
+
+```bash
+npm install @reduxjs/toolkit react-redux
+
+```
+
+**Using yarn:**
+
+```bash
+yarn add @reduxjs/toolkit react-redux
+
+```
+
+**Using pnpm:**
+
+```bash
+pnpm add @reduxjs/toolkit react-redux
+
+```
+
+### What are you installing?
+
+* **`@reduxjs/toolkit`**: This is the official, recommended toolset for writing Redux logic. You do not need to install the core `redux` package separately; it is already included inside the toolkit, along with other essential libraries like Immer (for safe state mutation), Redux Thunk (for async logic), and Reselect (for memoized selectors).
+* **`react-redux`**: This is the official bridging library that allows your React components to talk to the Redux store (providing the `useSelector` and `useDispatch` hooks).
