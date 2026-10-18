@@ -26,6 +26,7 @@
     - [The Master Pipeline: Render vs. Commit vs. Effects](#the-master-pipeline-render-vs-commit-vs-effects)
     - [Phase 1: The Initial Mount Sequence](#phase-1-the-initial-mount-sequence)
     - [Phase 2: The Re-render (Update) Sequence](#phase-2-the-re-render-update-sequence)
+      - [How Previous Effect Cleanup Works](#how-previous-effect-cleanup-works)
     - [Phase 3: The Unmount Sequence](#phase-3-the-unmount-sequence)
     - [Parent vs. Child Execution Order](#parent-vs-child-execution-order)
     - [Verification Example: The Full Lifecycle in Action](#verification-example-the-full-lifecycle-in-action)
@@ -35,6 +36,11 @@
     - [Conditional Rendering vs. CSS Hiding (`display: none`)](#conditional-rendering-vs-css-hiding-display-none)
     - [Common Gotchas with Conditional Rendering](#common-gotchas-with-conditional-rendering)
     - [How to Preserve State Across Conditional Toggles](#how-to-preserve-state-across-conditional-toggles)
+  - [6. What Happens to a Parent When a Child State Changes?](#6-what-happens-to-a-parent-when-a-child-state-changes)
+  - [7. Effect Cleanup on Dependency Changes: API Aborts & Event Listeners](#7-effect-cleanup-on-dependency-changes-api-aborts--event-listeners)
+    - [Case 1: Canceling In-Flight API Requests (Preventing Race Conditions)](#case-1-canceling-in-flight-api-requests-preventing-race-conditions)
+    - [Case 2: Event Listener Teardown (Preventing Listener Accumulation)](#case-2-event-listener-teardown-preventing-listener-accumulation)
+    - [Summary Checklist: What Happens on Dependency Change](#summary-checklist-what-happens-on-dependency-change)
 
 In React, a component has a lifecycle that you can monitor and manipulate during its three main phases: **Mounting**, **Updating**, and **Unmounting**.
 
@@ -821,12 +827,70 @@ Triggered whenever state changes (`setState`), new props are passed from above, 
    - React diffs the new Virtual DOM against the previous Virtual DOM snapshot to find minimal changes.
 5. **Commit to DOM:**
    - React updates *only* the specific DOM attributes or text nodes that changed (`node.textContent = ...`).
-6. **Previous Effect Cleanup:**
-   - If dependencies changed, React first calls the **cleanup function** returned by the *previous* render's `useEffect`.
-7. **Browser Paint:**
-   - Browser updates the modified screen pixels.
+6. **Browser Paint:**
+   - The browser recalculates layout and repaints the screen with the new DOM.
+7. **Previous Effect Cleanup (Post-Paint):**
+   - If dependencies changed, React calls the **cleanup function** returned by the *previous* render's `useEffect`.
 8. **New `useEffect` Runs:**
    - React executes the new `useEffect` callback with the updated values captured in its scope.
+
+#### How Previous Effect Cleanup Works
+
+Many developers assume effect cleanups only run on **Unmount**. In reality, on every re-render where dependencies change, React runs **Cleanup of Previous Render $\rightarrow$ Setup of Next Render**.
+
+React strictly enforces: **"Clean up the old world before setting up the new world."**
+
+```text
+  Render 1 (id: 1)  -----> Executes Effect(id: 1)
+                           Returns cleanupFn (captures id: 1 in closure)
+                           Stored in React Fiber: [ cleanupFn_1 ]
+                                 |
+                                 |  (Prop/state changes id to 2)
+                                 v
+  Render 2 (id: 2)  -----> 1. React invokes stored cleanupFn_1()
+                               Logs: "Disconnect from 1"  (Cleans old world)
+                           2. React invokes new Effect(id: 2)
+                               Logs: "Connect to 2"      (Sets up new world)
+                               Returns cleanupFn_2 (captures id: 2)
+```
+
+##### Behind the Scenes: How React Remembers What to Clean Up
+1. **Fiber Storage:** When an effect runs, React saves the returned cleanup callback on that hook's internal Fiber object (`fiber.memoizedState.destroy`).
+2. **Dependency Check:** On re-render, React compares current deps vs. previous deps (`Object.is`).
+3. **Old Closure Execution:** If dependencies changed, React retrieves `destroy` from the previous render and invokes it. Thanks to JavaScript closures, that cleanup function still accesses the **old** state/prop values from when it was declared.
+
+##### Code Example
+
+```javascript
+import { useEffect } from "react";
+
+function ChatRoom({ roomId }) {
+  useEffect(() => {
+    console.log(`🟢 [Setup] Connected to room: "${roomId}"`);
+
+    return () => {
+      // When roomId changes from "general" to "random",
+      // this closure still holds roomId = "general"!
+      console.log(`🧹 [Cleanup] Disconnected from room: "${roomId}"`);
+    };
+  }, [roomId]);
+
+  return <h2>Room: {roomId}</h2>;
+}
+```
+
+##### Exact Console Sequence Across Lifecycle:
+```text
+1. Initial Mount (roomId = "general"):
+🟢 [Setup] Connected to room: "general"
+
+2. Prop Changes (roomId = "random"):
+🧹 [Cleanup] Disconnected from room: "general"  <-- Old render's cleanup runs FIRST!
+🟢 [Setup] Connected to room: "random"          <-- New render's effect runs SECOND!
+
+3. Component Unmounts:
+🧹 [Cleanup] Disconnected from room: "random"   <-- Final unmount cleanup!
+```
 
 ---
 
@@ -1127,5 +1191,205 @@ function SearchFilter() {
   return <input value={query} onChange={(e) => setSearchParams({ q: e.target.value })} />;
 }
 ```
+
+## 6. What Happens to a Parent When a Child State Changes?
+
+The short answer: **Nothing!**
+
+In React, renders flow strictly **downwards** (unidirectional data flow). A child component's internal state update never causes its parent to re-render.
+
+```text
+       +-----------------------+
+       |   Parent Component    |  ---> DOES NOT RE-RENDER (Untouched)
+       +-----------------------+
+                   |
+                   v (props flow down)
+       +-----------------------+
+       |    Child Component    |  <--- setState() fires here
+       +-----------------------+       ONLY this child & its descendants re-render!
+```
+
+### Why React Works This Way
+- **Isolated Component Boundaries:** Each component owns and encapsulates its own state. When a child calls `setState()`, React schedules a re-render starting at that child's Fiber node, skipping all ancestor components above it.
+- **Performance Optimization ("Pushing State Down"):** Moving volatile state (like typing into a local `<input>` or toggling a dropdown) down into isolated leaf components prevents the entire parent tree from re-rendering needlessly.
+
+### The ONLY Exceptions (When a Parent DOES Re-render)
+A parent component will only re-render in response to a child action if that action alters state belonging to the parent:
+1. **Invoking a Parent Callback:** The child calls an event function passed down via props (e.g., `props.onSelect(item)`), which calls `setState` inside the parent.
+2. **Updating Shared Context / Store:** The child updates a React Context or global store (Zustand/Redux) that the parent component also subscribes to.
+
+```javascript
+import { useState } from "react";
+
+function Parent() {
+  console.log("Parent rendered"); // Runs ONLY on initial mount!
+
+  return (
+    <div>
+      <h1>Heavy Dashboard</h1>
+      {/* State updates inside ChildCounter stay strictly inside ChildCounter */}
+      <ChildCounter />
+    </div>
+  );
+}
+
+function ChildCounter() {
+  const [count, setCount] = useState(0);
+  console.log("Child rendered:", count); // Runs on every button click!
+
+  return <button onClick={() => setCount((c) => c + 1)}>Count: {count}</button>;
+}
+```
+
+## 7. Effect Cleanup on Dependency Changes: API Aborts & Event Listeners
+
+Whenever a dependency in `useEffect(..., [dependency])` changes, React executes the **previous effect's cleanup function before running the new effect**.
+
+This cleanup is not just for component unmounting — it is React’s primary defense against **network race conditions** and **memory leaks** during normal component updates.
+
+---
+
+### Case 1: Canceling In-Flight API Requests (Preventing Race Conditions)
+
+#### The Problem: The Out-of-Order Response Bug
+When a user rapidly switches between items (e.g., clicking from User 1 to User 2), two network requests are fired in quick succession. If Request 1 takes 2 seconds (slow network) and Request 2 takes 200 milliseconds (fast cache), Request 1 will resolve **last**, overwriting User 2's screen with outdated data from User 1!
+
+```text
+  User clicks "User 1":  Fetch(User 1) starts -----------------------------> Resolves LAST! (State overwritten with User 1!)
+                               \
+  User clicks "User 2":         Fetch(User 2) starts ---> Resolves FIRST!
+```
+
+#### How the Cleanup Fixes It (Using `AbortController`)
+When `userId` changes from 1 to 2, React immediately runs the cleanup returned by Render 1. That cleanup calls `controller.abort()`, canceling the in-flight HTTP request in the browser.
+
+```text
+  Render 1 (userId = 1):
+    1. Creates controller_1
+    2. Starts fetch("/api/user/1", { signal: controller_1.signal })
+    3. Saves cleanup: () => controller_1.abort()
+             |
+             | (userId prop changes to 2)
+             v
+  Render 2 (userId = 2):
+    1. React runs cleanup from Render 1: controller_1.abort()
+       --> Browser instantly CANCELS request for User 1!
+    2. Creates controller_2
+    3. Starts fetch("/api/user/2", { signal: controller_2.signal })
+    4. Only User 2's data sets state!
+```
+
+#### The Code:
+```javascript
+import { useState, useEffect } from "react";
+
+function UserProfile({ userId }) {
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    // 1. Instantiate an AbortController for THIS render's request
+    const controller = new AbortController();
+
+    fetch(`https://jsonplaceholder.typicode.com/users/${userId}`, {
+      signal: controller.signal, // Link request to the abort signal
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        console.log(`✅ Loaded data for user ${userId}`);
+        setUser(data);
+      })
+      .catch((err) => {
+        if (err.name === "AbortError") {
+          console.log(`🛑 Canceled in-flight request for user ${userId}`);
+        } else {
+          console.error("Fetch error:", err);
+        }
+      });
+
+    // 2. Cleanup runs when userId changes OR component unmounts
+    return () => {
+      // Aborts the previous fetch before the next one starts
+      controller.abort();
+    };
+  }, [userId]);
+
+  return <div>{user ? user.name : "Loading..."}</div>;
+}
+```
+
+---
+
+### Case 2: Event Listener Teardown (Preventing Listener Accumulation)
+
+#### The Problem: The Multiplied Listener Trap
+If your event listener relies on a changing prop or state (like a hotkey handler), you must include that variable in the dependency array. 
+
+Without a cleanup function, **every single render adds another event listener to `window`**. After 5 renders, a single keypress triggers the callback 5 times!
+
+```text
+  Render 1: window.addEventListener("keydown", fn1)  --> 1 active listener
+  Render 2: window.addEventListener("keydown", fn2)  --> 2 active listeners!
+  Render 3: window.addEventListener("keydown", fn3)  --> 3 active listeners!
+  (User presses a key: ALL 3 listeners fire simultaneously!)
+```
+
+#### How the Cleanup Fixes It
+When the dependency changes, React first executes `window.removeEventListener("keydown", fn1)` using the *exact function reference* stored from Render 1, then attaches `fn2`.
+
+```text
+  Render 1 (step = 1):
+    1. Creates handleKeyDown_1 (captures step = 1)
+    2. window.addEventListener("keydown", handleKeyDown_1)
+             |
+             | (step updates to 5)
+             v
+  Render 2 (step = 5):
+    1. Cleanup: window.removeEventListener("keydown", handleKeyDown_1) (Removed!)
+    2. Creates handleKeyDown_2 (captures step = 5)
+    3. window.addEventListener("keydown", handleKeyDown_2) (Attached!)
+    Result: ALWAYS exactly ONE listener active at any time.
+```
+
+#### The Code:
+```javascript
+import { useState, useEffect } from "react";
+
+function KeyStepper({ step }) {
+  const [value, setValue] = useState(0);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "ArrowUp") {
+        // Uses the current 'step' value captured in closure
+        setValue((v) => v + step);
+      }
+    };
+
+    console.log(`🟢 Attached keydown listener with step = ${step}`);
+    window.addEventListener("keydown", handleKeyDown);
+
+    // Runs BEFORE attaching a new listener on step change
+    return () => {
+      console.log(`🧹 Removed keydown listener with step = ${step}`);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [step]); // Re-subscribes whenever 'step' changes
+
+  return <div>Value: {value} (Step size: {step})</div>;
+}
+```
+
+---
+
+### Summary Checklist: What Happens on Dependency Change
+
+| Step | Operation | What Happens to Network / DOM |
+| :--- | :--- | :--- |
+| **1. Prop/State Change** | Component re-evaluates | Virtual DOM diffed; Real DOM updated |
+| **2. Browser Paint** | Screen updates | User sees new DOM on screen |
+| **3. Previous Cleanup Runs** | Stored `return () => {}` executes | `controller.abort()` cancels old HTTP request; `removeEventListener` detaches old listener |
+| **4. New Effect Runs** | New `useEffect` callback executes | New `fetch()` initiated; new `addEventListener` attached with fresh closure |
+
+
 
 
