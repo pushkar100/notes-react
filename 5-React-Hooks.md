@@ -8,12 +8,15 @@
       - [How it works (Under the Hood)](#how-it-works-under-the-hood)
     - [2. The Lifecycle of `useState`](#2-the-lifecycle-of-usestate)
     - [3. Async/Sync and Batching (How State is Set)](#3-asyncsync-and-batching-how-state-is-set)
+      - [The Dispatch-to-Render Sequence (The Execution Pipeline)](#the-dispatch-to-render-sequence-the-execution-pipeline)
       - [Automatic Batching (React 18+)](#automatic-batching-react-18)
     - [4. When to Use It vs. When to Avoid It](#4-when-to-use-it-vs-when-to-avoid-it)
     - [5. Gotchas and Tricky Concepts](#5-gotchas-and-tricky-concepts)
       - [Gotcha #1: State is a Snapshot (The Closure Trap)](#gotcha-1-state-is-a-snapshot-the-closure-trap)
       - [Gotcha #2: Object/Array Mutation](#gotcha-2-objectarray-mutation)
       - [Gotcha #3: Lazy Initialization](#gotcha-3-lazy-initialization)
+      - [Gotcha #4: No Secondary Callback in State Setter (Reading the Updated Value)](#gotcha-4-no-secondary-callback-in-state-setter-reading-the-updated-value)
+        - [How to Read the Updated Value](#how-to-read-the-updated-value)
     - [6. Advanced Usage Examples](#6-advanced-usage-examples)
       - [A. The Updater Function Pattern](#a-the-updater-function-pattern)
       - [B. Managing Complex Forms](#b-managing-complex-forms)
@@ -27,6 +30,7 @@
       - [The Render-to-Effect Sequence](#the-render-to-effect-sequence)
     - [3. Anatomy of the Dependency Array (The Triggers)](#3-anatomy-of-the-dependency-array-the-triggers)
       - [The Cleanup Function Timeline](#the-cleanup-function-timeline)
+      - [The Re-render & Cleanup Pipeline (Update Sequence)](#the-re-render--cleanup-pipeline-update-sequence)
     - [4. When to Use It (And When NOT To)](#4-when-to-use-it-and-when-not-to)
       - [✅ Good: Fetching external data](#good-fetching-external-data)
       - [✅ Good: Subscribing to external APIs or manually modifying the DOM](#good-subscribing-to-external-apis-or-manually-modifying-the-dom)
@@ -52,9 +56,11 @@
       - [Gotcha #1: The Render Phase Mutation Trap](#gotcha-1-the-render-phase-mutation-trap)
       - [Gotcha #2: The `forwardRef` Barrier](#gotcha-2-the-forwardref-barrier)
     - [6. Real-World Usage Examples](#6-real-world-usage-examples)
-      - [Example A: The DOM Node Pointer (Classic)](#example-a-the-dom-node-pointer-classic)
-      - [Example B: The Instance Variable (Stopwatch)](#example-b-the-instance-variable-stopwatch)
-      - [Example C: Escaping Stale Closures (Advanced)](#example-c-escaping-stale-closures-advanced)
+      - [Example A: Direct DOM Manipulation (Focus, Scroll, Measure)](#example-a-direct-dom-manipulation-focus-scroll-measure)
+      - [Example B: Storing Interval & Timer IDs (Clean Teardown)](#example-b-storing-interval--timer-ids-clean-teardown)
+      - [Example C: Tracking Previous State (`usePrevious`)](#example-c-tracking-previous-state-useprevious)
+      - [Example D: Tracking 3rd-Party Library Instances (Chart.js / Maps)](#example-d-tracking-3rd-party-library-instances-chartjs--maps)
+      - [Example E: Escaping Stale Closures (State Mirroring)](#example-e-escaping-stale-closures-state-mirroring)
     - [7. Tier-1 Interview Execution (Machine Coding)](#7-tier-1-interview-execution-machine-coding)
       - [The Challenge: "Write a `usePrevious` hook"](#the-challenge-write-a-useprevious-hook)
   - [`useContext`](#usecontext)
@@ -75,6 +81,7 @@
       - [Machine Coding Challenge: "Build a Compound Component"](#machine-coding-challenge-build-a-compound-component)
   - [`useReducer`](#usereducer)
     - [1. The Genesis: Why, What, and How?](#1-the-genesis-why-what-and-how)
+      - [How to Use It (The 3-Step Recipe)](#how-to-use-it-the-3-step-recipe)
       - [The Mental Model: The State Machine](#the-mental-model-the-state-machine)
     - [2. When to Use It (And When NOT To)](#2-when-to-use-it-and-when-not-to)
     - [3. How it Fits into the Lifecycle & Execution](#3-how-it-fits-into-the-lifecycle-execution)
@@ -340,6 +347,36 @@ It is **asynchronous** from the perspective of your current code block, but it t
 
 When you call `setCount(1)`, React does NOT immediately change the `count` variable. Instead, it adds a "ticket" to a queue and says, "I will update the UI when this function finishes executing."
 
+#### The Dispatch-to-Render Sequence (The Execution Pipeline)
+
+```text
+  1. TRIGGER / DISPATCH (User clicks button -> setState(newValue) called)
+       |
+       +---> [Eager Bailout Check]: React checks Object.is(oldState, newState).
+       |     If identical, React bails out early (no re-render scheduled!).
+       |
+  2. SCHEDULE & QUEUE
+       |
+       +---> React pushes update into the Fiber node's hook update queue.
+       +---> React schedules a re-render with the Scheduler (batching pending updates).
+       |
+  3. RENDER PHASE (React calls component function, builds Virtual DOM)
+       |
+       +---> React re-calls your component function with a NEW closure snapshot.
+       +---> useState() runs: ignores initial value, processes update queue, returns [newState, setter].
+       +---> React generates new Virtual DOM tree and diffs it against old tree.
+       |
+  4. COMMIT PHASE (React patches the actual DOM)
+       |
+       +---> React applies minimal necessary changes to the real DOM synchronously.
+       +---> (useLayoutEffect runs synchronously here, before paint).
+       |
+  5. BROWSER PAINT (The user sees the updated UI on screen!)
+       |
+  6. ⚡ PASSIVE EFFECTS (React quietly runs useEffect in the background)
+
+```
+
 #### Automatic Batching (React 18+)
 
 If you trigger multiple state updates in a single event, React batches them into a **single re-render** for performance.
@@ -429,6 +466,114 @@ const [theme, setTheme] = useState(localStorage.getItem('theme'));
 // FAST (Lazy Init): Pass a function. It only runs ONCE on mount.
 const [theme, setTheme] = useState(() => localStorage.getItem('theme'));
 
+```
+
+#### Gotcha #4: No Secondary Callback in State Setter (Reading the Updated Value)
+
+In React class components, `this.setState` accepted an optional second argument—a callback executed immediately after state was updated and re-rendered:
+
+```javascript
+// CLASS COMPONENT (Old Way)
+this.setState({ count: this.state.count + 1 }, () => {
+  console.log('Updated count:', this.state.count); // 1
+  sendAnalytics(this.state.count);
+});
+```
+
+A common mistake when transitioning to React Hooks is attempting to pass a second argument to `useState`'s setter function:
+
+```javascript
+// ❌ DOES NOT WORK: React ignores any secondary arguments!
+const [count, setCount] = useState(0);
+
+const handleClick = () => {
+  // TypeScript will flag a compiler error; in plain JS, React silently ignores the callback!
+  setCount(count + 1, (newCount) => {
+    console.log('Updated count:', newCount); // NEVER RUNS!
+  });
+};
+```
+
+The `useState` setter function signature is strictly unary:
+`dispatch: (value: S | ((prevState: S) => S)) => void`
+It only accepts **one argument** (either the new value or an updater function `prev => next`).
+
+---
+
+##### How to Read the Updated Value
+
+Depending on *when* and *why* you need the updated value, there are three canonical solutions:
+
+###### Solution 1: The Local Variable Pattern (Immediate Synchronous Use)
+If you need the updated value immediately inside the same event handler (e.g., to send an API request, track analytics, or update another system), compute it in a local variable **first**:
+
+```javascript
+const handleSave = () => {
+  // 1. Calculate the new value into a local variable
+  const nextCount = count + 1;
+
+  // 2. Schedule the state update
+  setCount(nextCount);
+
+  // 3. Use the updated value immediately!
+  sendAnalytics(nextCount);
+  api.post('/save-count', { count: nextCount });
+};
+```
+
+###### Solution 2: The `useEffect` Pattern (Post-Render / After DOM Commit)
+If you need to perform an operation *after* React has re-rendered and updated the actual DOM with the new state (the direct functional equivalent to `this.setState`'s second argument callback), use `useEffect`:
+
+```javascript
+const [count, setCount] = useState(0);
+
+// Runs automatically AFTER the component re-renders with the new count
+useEffect(() => {
+  console.log('Component rendered with updated count:', count);
+  // Perform DOM measurements, side effects, or external syncing here
+}, [count]);
+```
+
+###### Solution 3 (Interview Favorite): Polyfill `useStateWithCallback`
+In Tier-1 interviews or during codebase refactors from Class components, you might be asked: *"How would you build a custom hook that replicates `this.setState(newState, callback)` in Hooks?"*
+
+You can implement it cleanly using `useRef` and `useEffect`:
+
+```javascript
+import { useState, useRef, useEffect, useCallback } from 'react';
+
+function useStateWithCallback(initialValue) {
+  const [state, setState] = useState(initialValue);
+  const callbackRef = useRef(null);
+
+  const setStateWithCallback = useCallback((nextState, callback) => {
+    callbackRef.current = callback; // Store the callback in a ref
+    setState(nextState);
+  }, []);
+
+  useEffect(() => {
+    // If a callback was registered, invoke it with the latest state
+    if (callbackRef.current) {
+      callbackRef.current(state);
+      callbackRef.current = null; // Clear after execution
+    }
+  }, [state]);
+
+  return [state, setStateWithCallback];
+}
+
+// Usage:
+function Counter() {
+  const [count, setCount] = useStateWithCallback(0);
+
+  const handleClick = () => {
+    setCount(count + 1, (updatedCount) => {
+      console.log('Called after state committed:', updatedCount);
+    });
+  };
+
+  return <button onClick={handleClick}>Count: {count}</button>;
+}
 ```
 
 ### 6. Advanced Usage Examples
@@ -639,6 +784,39 @@ useEffect(() => {
 * "1. Cleanup previous connection: A"
 * "2. Setup connected to: B"
 
+#### The Re-render & Cleanup Pipeline (Update Sequence)
+
+```text
+  1. DEPENDENCY / STATE CHANGE (e.g. roomId changes from "A" to "B")
+       |
+  2. RENDER PHASE (React calls component function, builds Virtual DOM)
+       |
+       +---> React calls component function with new props & state.
+       +---> React evaluates useEffect: compares dependencies via Object.is(prevDep, nextDep).
+       +---> Change detected -> React flags this effect for execution.
+       |
+  3. COMMIT PHASE (React patches the actual DOM)
+       |
+       +---> React updates the actual DOM nodes to match the new render output.
+       |
+  4. BROWSER PAINT (The user sees the updated UI on screen!)
+       |
+       +---> Browser recalculates layout & paints pixels.
+       +---> User ALREADY sees the new UI before the effect or cleanup runs!
+       |
+  5. ⚡ EFFECT PHASE (Asynchronous / Deferred in Background)
+       |
+       |-- Step 5a: PREVIOUS CLEANUP RUNS FIRST
+       |     React executes cleanup return () => {...} from the PREVIOUS render.
+       |     (Closed over OLD snapshot: e.g. disconnects roomId "A").
+       |
+       v
+       |-- Step 5b: NEW SETUP RUNS SECOND
+             React executes setup callback () => {...} for the CURRENT render.
+             (Closed over NEW snapshot: e.g. connects to roomId "B").
+
+```
+
 ### 4. When to Use It (And When NOT To)
 
 In modern React architecture, the most common mistake is overusing `useEffect`. Senior engineers know when to leave it out.
@@ -716,11 +894,126 @@ function UserProfile({ userId }) {
 
 In development mode only, React 18 intentionally mounts your component, instantly unmounts it, and remounts it (`Mount -> Unmount -> Mount`).
 
-* **Why?** To aggressively test if your cleanup functions are working. If you notice an API being called twice or a timer running doubly fast in dev, *do not remove Strict Mode*. Fix your cleanup function.
+* **Why?** To aggressively test if your cleanup functions are working. Future React features (like Offscreen/Activity API) preserve component state when a screen is navigated away from and back. If your effect lacks proper cleanup, remounting leads to memory leaks, duplicate network requests, and duplicated listeners.
+* **The Rule:** If you notice an API being called twice or a timer running doubly fast in dev, *do not disable Strict Mode* and *do not use a `useRef(false)` flag to prevent it*. Fix your cleanup function so your effect is fully **reversible**.
+
+```javascript
+// BROKEN: Missing cleanup creates duplicate event listeners in Dev!
+function WindowTracker() {
+  const [coords, setCoords] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const handleMove = (e) => setCoords({ x: e.clientX, y: e.clientY });
+    window.addEventListener('mousemove', handleMove);
+    // BUG: No cleanup returned!
+    // In React 18 Dev: 
+    // 1. Mount: attaches listener #1
+    // 2. Unmount: (does nothing because no cleanup!)
+    // 3. Remount: attaches listener #2 -> Now running duplicate listeners!
+  }, []);
+
+  return <div>{coords.x}, {coords.y}</div>;
+}
+```
+
+```javascript
+// THE FIX: Provide a symmetric cleanup function
+function WindowTracker() {
+  const [coords, setCoords] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const handleMove = (e) => setCoords({ x: e.clientX, y: e.clientY });
+    window.addEventListener('mousemove', handleMove);
+
+    // Symmetric cleanup: destroys listener #1 during unmount,
+    // so listener #2 is the only active listener after remount.
+    return () => window.removeEventListener('mousemove', handleMove);
+  }, []);
+
+  return <div>{coords.x}, {coords.y}</div>;
+}
+```
+
+For data fetching in Strict Mode, use `AbortController` to abort inflight requests during the unmount step:
+
+```javascript
+// Data fetching with AbortController in Strict Mode
+useEffect(() => {
+  const controller = new AbortController();
+
+  fetch('/api/user', { signal: controller.signal })
+    .then(res => res.json())
+    .then(data => setUser(data))
+    .catch(err => {
+      if (err.name !== 'AbortError') console.error('Fetch error:', err);
+    });
+
+  // Strict Mode unmounts and cancels 1st request; 2nd request finishes cleanly
+  return () => controller.abort();
+}, []);
+```
 
 #### Gotcha #3: Missing Dependencies (Stale Closures)
 
-If you use a state variable inside the effect but forget to put it in the dependency array, the effect is trapped in a closure from the first render. It will forever see the old value. The `eslint-plugin-react-hooks` package is mandatory to catch this automatically.
+If you use a state or prop variable inside the effect but forget to include it in the dependency array, the effect is trapped in a **stale closure** created during the initial render. It will forever see the old value from that first snapshot. The `eslint-plugin-react-hooks` package (`react-hooks/exhaustive-deps`) is mandatory to catch this automatically.
+
+```javascript
+// BROKEN: Stale Closure Trap
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      // BUG: 'count' is captured from render #1 where count === 0!
+      // Every 1s, this calls setCount(0 + 1) -> count becomes 1 and STAYS 1 forever!
+      console.log('Closure sees count as:', count);
+      setCount(count + 1);
+    }, 1000);
+
+    return () => clearInterval(id);
+  }, []); // [] tells React: "Only run on mount and NEVER re-evaluate"
+
+  return <h1>{count}</h1>;
+}
+```
+
+**Fix Option A (Best): Use the Functional Updater Pattern**
+
+If you only need the previous state to compute the next state, do not read the state variable directly. Use `setCount(prev => prev + 1)`. This removes `count` as an external dependency completely:
+
+```javascript
+// FIX A (Recommended): Functional updater avoids the closure dependency
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      // React passes the fresh, latest state directly to 'prev'
+      setCount(prev => prev + 1);
+    }, 1000);
+
+    return () => clearInterval(id);
+  }, []); // Safe: 'count' is no longer referenced inside the effect!
+
+  return <h1>{count}</h1>;
+}
+```
+
+**Fix Option B: Include the Dependency (When external side-effects need the latest value)**
+
+If the effect genuinely needs to perform an external operation using that value (e.g. syncing with an external API or document title), declare it in the dependency array:
+
+```javascript
+// FIX B: Add the dependency so React re-creates the effect with fresh closure
+function DocumentTitleUpdater({ count }) {
+  useEffect(() => {
+    document.title = `Count: ${count}`;
+  }, [count]); // Runs cleanup (if any) and re-executes whenever 'count' changes
+}
+```
+
+> [!WARNING]
+> Never suppress the linter warning using `// eslint-disable-next-line react-hooks/exhaustive-deps`. Doing so almost always introduces a silent stale closure bug in production.
 
 ### 6. Tier-1 Interview Execution
 
@@ -922,62 +1215,196 @@ const MyCustomInput = forwardRef((props, ref) => {
 
 ### 6. Real-World Usage Examples
 
-#### Example A: The DOM Node Pointer (Classic)
+#### Example A: Direct DOM Manipulation (Focus, Scroll, Measure)
 
-Focusing an input field when a component mounts.
+React provides a declarative model for UI, but certain browser APIs (such as `.focus()`, `.scrollIntoView()`, `.play()`, and `.getBoundingClientRect()`) require direct, imperative access to the native DOM element.
 
 ```javascript
 import { useRef, useEffect } from 'react';
 
-function AutoFocusInput() {
-  // 1. Initialize with null (the DOM node doesn't exist yet)
+function ChatBox({ messages }) {
   const inputRef = useRef(null);
+  const bottomScrollRef = useRef(null);
 
+  // 1. Auto-focus the input on initial mount
   useEffect(() => {
-    // 3. In the effect (after DOM is painted), the ref is attached.
-    // We can call standard vanilla JavaScript DOM methods on it.
-    inputRef.current.focus();
+    inputRef.current?.focus();
   }, []);
 
-  // 2. Pass the ref to the element. React wires it up automatically.
-  return <input ref={inputRef} type="text" placeholder="I focus instantly" />;
-}
-
-```
-
-#### Example B: The Instance Variable (Stopwatch)
-
-Storing a timer ID so we can clear it later, without causing re-renders when the ID changes.
-
-```javascript
-function Stopwatch() {
-  const [seconds, setSeconds] = useState(0);
-  const timerIdRef = useRef(null);
-
-  const start = () => {
-    // We store the ID in the ref. No re-render triggered.
-    timerIdRef.current = setInterval(() => {
-      setSeconds(prev => prev + 1);
-    }, 1000);
-  };
-
-  const stop = () => {
-    // We can access the exact ID across renders to clear it
-    clearInterval(timerIdRef.current);
-  };
+  // 2. Smoothly scroll down whenever a new message arrives
+  useEffect(() => {
+    bottomScrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   return (
-    <div>
-      <p>{seconds}s</p>
-      <button onClick={start}>Start</button>
-      <button onClick={stop}>Stop</button>
+    <div className="chat-container">
+      <div className="messages-window" style={{ overflowY: 'auto', height: 300 }}>
+        {messages.map((msg, i) => (
+          <p key={i}>{msg}</p>
+        ))}
+        {/* Invisible anchor element at the very bottom of the chat */}
+        <div ref={bottomScrollRef} />
+      </div>
+
+      <input 
+        ref={inputRef} 
+        type="text" 
+        placeholder="Type a message..." 
+      />
     </div>
   );
 }
-
 ```
 
-#### Example C: Escaping Stale Closures (Advanced)
+* **Why `useRef`?** Modifying focus or scroll position imperatively via DOM nodes avoids re-running component renders.
+
+---
+
+#### Example B: Storing Interval & Timer IDs (Clean Teardown)
+
+Browser timer functions (`setInterval`, `setTimeout`) return an integer identifier. 
+* If you store this ID in a local variable (`let timerId`), it gets wiped on the next render.
+* If you store it in `useState`, calling `setTimerId` triggers an unnecessary re-render.
+* Storing it in `useRef` preserves the timer ID across renders without causing UI re-renders, and allows clean cancellation inside button handlers or `useEffect` unmount cleanup.
+
+```javascript
+import { useState, useRef, useEffect } from 'react';
+
+function PollingDashboard() {
+  const [isPolling, setIsPolling] = useState(false);
+  
+  // Store timer ID silently across renders without triggering re-renders
+  const timerIdRef = useRef(null);
+
+  const startPolling = () => {
+    if (timerIdRef.current !== null) return; // Prevent duplicate timers
+
+    setIsPolling(true);
+    timerIdRef.current = setInterval(() => {
+      console.log('Fetching live telemetry metric...');
+      // fetch('/api/metrics').then(...)
+    }, 2000);
+  };
+
+  const stopPolling = () => {
+    if (timerIdRef.current !== null) {
+      clearInterval(timerIdRef.current);
+      timerIdRef.current = null; // Reset pointer
+      setIsPolling(false);
+    }
+  };
+
+  // Crucial: Clean up timer if component unmounts to prevent memory leaks!
+  useEffect(() => {
+    return () => {
+      if (timerIdRef.current !== null) {
+        clearInterval(timerIdRef.current);
+      }
+    };
+  }, []);
+
+  return (
+    <div>
+      <p>Status: {isPolling ? '🟢 Polling Live' : '🔴 Paused'}</p>
+      <button onClick={startPolling} disabled={isPolling}>Start</button>
+      <button onClick={stopPolling} disabled={!isPolling}>Stop</button>
+    </div>
+  );
+}
+```
+
+---
+
+#### Example C: Tracking Previous State (`usePrevious`)
+
+Functional components do not provide access to `prevProps` or `prevState` by default. Because `useEffect` runs **after** render and paint, we can use a ref as a memory slot that holds the *previous* value during the render phase and updates *after* the browser paints.
+
+```javascript
+import { useState, useRef, useEffect } from 'react';
+
+// Custom hook to track what a value was on the previous render
+function usePrevious(value) {
+  const ref = useRef();
+
+  useEffect(() => {
+    // 2. Runs AFTER paint: updates ref to current value for the NEXT render
+    ref.current = value;
+  }, [value]);
+
+  // 1. Returned DURING render: ref still holds value from PREVIOUS render!
+  return ref.current;
+}
+
+// Practical Example: Stock Ticker with Price Direction
+function StockTicker({ currentPrice }) {
+  const prevPrice = usePrevious(currentPrice);
+
+  const priceDirection = 
+    prevPrice === undefined ? 'Neutral' :
+    currentPrice > prevPrice ? '📈 Gained' : 
+    currentPrice < prevPrice ? '📉 Dropped' : 'Unchanged';
+
+  return (
+    <div>
+      <h3>Current: ${currentPrice}</h3>
+      <p>Previous: ${prevPrice ?? 'N/A'}</p>
+      <p>Trend: {priceDirection}</p>
+    </div>
+  );
+}
+```
+
+---
+
+#### Example D: Tracking 3rd-Party Library Instances (Chart.js / Maps)
+
+Non-React libraries (such as **Chart.js**, **Mapbox / Leaflet**, **Video.js**, or **D3**) maintain their own internal state and imperative lifecycles. 
+* Putting a 3rd-party instance into `useState` causes unnecessary re-renders and can break due to React's state immutability / freezing.
+* Normal variables lose the instance pointer whenever the component re-renders.
+* `useRef` retains the exact instance across renders, allowing you to update it imperatively when props change and destroy it during unmount cleanup.
+
+```javascript
+import { useRef, useEffect } from 'react';
+import Chart from 'chart.js/auto';
+
+function SalesChart({ salesData }) {
+  const canvasRef = useRef(null);        // Ref for the DOM <canvas> node
+  const chartInstanceRef = useRef(null); // Ref for the imperative 3rd-party instance
+
+  // 1. Initialize the 3rd-party instance once on mount
+  useEffect(() => {
+    if (!canvasRef.current) return;
+
+    chartInstanceRef.current = new Chart(canvasRef.current, {
+      type: 'bar',
+      data: {
+        labels: ['Q1', 'Q2', 'Q3', 'Q4'],
+        datasets: [{ label: 'Sales ($k)', data: salesData }]
+      }
+    });
+
+    // Clean up: Destroy chart instance when unmounting to avoid memory leaks
+    return () => {
+      chartInstanceRef.current?.destroy();
+      chartInstanceRef.current = null;
+    };
+  }, []); // Run once on mount
+
+  // 2. Imperatively update the existing chart instance when data changes
+  useEffect(() => {
+    if (chartInstanceRef.current) {
+      chartInstanceRef.current.data.datasets[0].data = salesData;
+      chartInstanceRef.current.update(); // 3rd-party method call
+    }
+  }, [salesData]);
+
+  return <canvas ref={canvasRef} />;
+}
+```
+
+---
+
+#### Example E: Escaping Stale Closures (State Mirroring)
 
 Sometimes you have a `useEffect` or an event listener that needs the absolute latest state, but adding that state to the dependency array would cause the effect to re-run too often (like resetting a timer). You can use a ref to "mirror" the state.
 
@@ -1003,7 +1430,6 @@ function LiveChat({ userId }) {
     return () => socket.disconnect();
   }, [userId]); // Notice 'message' is NOT in the dependency array!
 }
-
 ```
 
 ### 7. Tier-1 Interview Execution (Machine Coding)
@@ -1288,6 +1714,82 @@ AuthContext.displayName = 'AuthContext'; // DevTools will now show <AuthContext.
 2. **Higher-Order Component / Memoization:** Wrap the child of the component consuming the context in `React.memo`, passing only the specific primitive values it needs as props.
 3. **Switch to an External Store:** If the state is this complex, we should abandon Context for state management and use a tool like Zustand or Redux, which use `useSyncExternalStore` to allow granular selector subscriptions."
 
+##### Mini Code Examples for Each Solution:
+
+```javascript
+// ============================================================================
+// SOLUTION 1: Split the Context (Granular Providers)
+// ============================================================================
+const FirstNameContext = createContext(null);
+const LastNameContext = createContext(null);
+
+function UserProvider({ children }) {
+  const [firstName, setFirstName] = useState('Pushkar');
+  const [lastName, setLastName] = useState('Anand');
+
+  return (
+    <FirstNameContext.Provider value={firstName}>
+      <LastNameContext.Provider value={lastName}>
+        {children}
+      </LastNameContext.Provider>
+    </FirstNameContext.Provider>
+  );
+}
+
+// ComponentA only consumes FirstNameContext:
+function ComponentA() {
+  const firstName = useContext(FirstNameContext);
+  // ✅ Only re-renders when firstName changes. When lastName changes, this is untouched!
+  return <h1>Hello, {firstName}</h1>;
+}
+```
+
+```javascript
+// ============================================================================
+// SOLUTION 2: Higher-Order Component / Memoization Split Pattern
+// ============================================================================
+const UserContext = createContext(null); // value: { firstName, lastName }
+
+// Step 1: Wrap the actual UI tree in React.memo
+// React.memo checks props: if 'firstName' (primitive) hasn't changed, it bails out!
+const MemoizedDisplay = React.memo(function Display({ firstName }) {
+  console.log('Heavy Child UI rendered'); // Skipped when only lastName updates!
+  return <h1>Hello, {firstName}</h1>;
+});
+
+// Step 2: Consumer component acts as a lightweight data extraction adapter
+function ComponentA() {
+  const { firstName } = useContext(UserContext); // Consumer still re-runs...
+  
+  // ...but passes only the primitive 'firstName' down.
+  // Because 'firstName' didn't change, MemoizedDisplay completely bails out of rendering!
+  return <MemoizedDisplay firstName={firstName} />;
+}
+```
+
+```javascript
+// ============================================================================
+// SOLUTION 3: Switch to an External Store (Zustand / useSyncExternalStore)
+// ============================================================================
+import { create } from 'zustand';
+
+// External store holds state outside React's component tree
+const useUserStore = create((set) => ({
+  firstName: 'Pushkar',
+  lastName: 'Anand',
+  setLastName: (newLastName) => set({ lastName: newLastName }),
+}));
+
+function ComponentA() {
+  // Selector subscription: ComponentA ONLY subscribes to changes in 'state.firstName'!
+  const firstName = useUserStore((state) => state.firstName);
+
+  // ✅ useSyncExternalStore detects state.firstName didn't change -> bails out entirely!
+  // Calling setLastName('Singh') elsewhere will NEVER trigger a re-render here.
+  return <h1>Hello, {firstName}</h1>;
+}
+```
+
 #### Machine Coding Challenge: "Build a Compound Component"
 
 **Interviewer:** "Build an Accordion component using compound components (`<Accordion>`, `<Accordion.Item>`) where only one item can be open at a time. The items shouldn't accept `isOpen` props directly from the user."
@@ -1353,11 +1855,80 @@ Here is the comprehensive, zero-to-hero guide on `useReducer`.
 Introduced alongside `useState` in React 16.8, `useReducer` is heavily inspired by **Redux**. In complex UIs, state updates often depend on the previous state, or multiple pieces of state need to change simultaneously (e.g., when data finishes loading, you must set `isLoading` to false, `data` to the payload, and `error` to null). Doing this with multiple `useState` calls leads to buggy, tangled code. `useReducer` solves this by forcing you to express *what* happened as an "Action", rather than imperatively writing *how* the state should change inside your component.
 
 **What is it?**
-It is a hook that manages complex state by using a **Reducer Function**.
+`useReducer` is an alternative to `useState` that manages state transitions through a centralized, pure **Reducer Function**.
 
-* **Reducer:** A pure JavaScript function that takes the current `state` and an `action`, and returns a brand new `state`.
-* **Action:** An object describing what just happened (e.g., `{ type: 'LOGIN_SUCCESS', payload: user }`).
-* **Dispatch:** The function you call from your component to send the Action to the Reducer.
+* **Reducer:** A pure JavaScript function `(state, action) => newState` that takes the current state and an action, and returns the next state.
+* **Action:** A plain JavaScript object describing what happened (conventionally `{ type: 'ACTION_TYPE', payload?: any }`).
+* **Dispatch:** The trigger function you call from event handlers to send actions to the reducer.
+
+#### The Hook Signature
+
+```javascript
+const [state, dispatch] = useReducer(reducer, initialState, init?);
+```
+
+| Parameter | Type | Purpose |
+| :--- | :--- | :--- |
+| `state` | Any | The current state snapshot returned by React. |
+| `dispatch` | `(action) => void` | Sends actions to the reducer (stable function identity across renders). |
+| `reducer` | `(state, action) => newState` | Pure function defining how state transforms based on incoming actions. |
+| `initialState` | Any | The initial value of the state. |
+| `init` *(optional)* | `(initialArg) => state` | Lazy initializer function (runs only once during initial mount). |
+
+---
+
+#### How to Use It (The 3-Step Recipe)
+
+Using `useReducer` in your component requires three straightforward steps:
+
+```javascript
+import { useReducer } from 'react';
+
+// STEP 1: Define the Initial State
+const initialState = { count: 0, step: 1 };
+
+// STEP 2: Write the Reducer Function (MUST be pure: state, action => newState)
+function counterReducer(state, action) {
+  switch (action.type) {
+    case 'INCREMENT':
+      return { ...state, count: state.count + state.step };
+    case 'DECREMENT':
+      return { ...state, count: state.count - state.step };
+    case 'SET_STEP':
+      return { ...state, step: action.payload };
+    case 'RESET':
+      return initialState;
+    default:
+      // Fails fast if an unexpected action type is dispatched
+      throw new Error(`Unhandled action type: ${action.type}`);
+  }
+}
+
+// STEP 3: Wire it up in your component & dispatch actions
+function Counter() {
+  const [state, dispatch] = useReducer(counterReducer, initialState);
+
+  return (
+    <div>
+      <h2>Count: {state.count}</h2>
+      <p>Current Step: {state.step}</p>
+
+      {/* Dispatching simple actions */}
+      <button onClick={() => dispatch({ type: 'DECREMENT' })}>-</button>
+      <button onClick={() => dispatch({ type: 'INCREMENT' })}>+</button>
+
+      {/* Dispatching actions with payload data */}
+      <button onClick={() => dispatch({ type: 'SET_STEP', payload: 5 })}>
+        Step by 5
+      </button>
+
+      <button onClick={() => dispatch({ type: 'RESET' })}>Reset</button>
+    </div>
+  );
+}
+```
+
+* **Mental Rule:** Your UI components only announce **what happened** (`dispatch({ type: 'INCREMENT' })`). The reducer function decides **how the state transforms**.
 
 #### The Mental Model: The State Machine
 
@@ -1487,14 +2058,138 @@ function reducer(state, action) {
 
 #### Gotcha #3: Lazy Initialization (The 3rd Argument)
 
-If calculating your initial state is expensive (like reading a huge object from `localStorage`), don't pass it as the second argument. Pass an initialization function as the third argument.
+If calculating your initial state is expensive (such as parsing large JSON, reading from `localStorage`, or filtering a huge static list), **never calculate it inline as the second argument**. Always pass an initialization function as the **third argument (`init`)**.
+
+##### The Why: JavaScript Evaluates Arguments Eagerly
+
+In JavaScript, function arguments are evaluated *before* the function itself is invoked. Because React executes your component function from top to bottom on **every single re-render**, inline expressions execute every time.
 
 ```javascript
-// 3rd argument 'init' function only runs ONCE during mount
-const [state, dispatch] = useReducer(reducer, 'my_key', (key) => {
-  return JSON.parse(localStorage.getItem(key));
-});
+function Dashboard() {
+  // ❌ BAD: Evaluated on EVERY SINGLE RENDER!
+  const [state, dispatch] = useReducer(
+    reducer, 
+    JSON.parse(localStorage.getItem('user_settings')) 
+  );
+  // ...
+}
+```
 
+* **On Mount (Render 1):** JavaScript runs `localStorage.getItem` (blocking disk I/O) and `JSON.parse` (CPU work). React stores the result in Fiber memory.
+* **On Re-renders (Renders 2, 3, 4...):** JavaScript **still executes** `localStorage.getItem` and `JSON.parse` on every render. However, React already has the live state in its Fiber slot, so it **completely discards and ignores** this evaluated object!
+
+> [!WARNING]
+> This leads to silent main-thread jank and garbage collection churn, especially on mobile devices.
+
+##### The Fix: Pass `init` as the 3rd Argument
+
+When you supply an `init` function as the third argument, you pass React a **function reference** rather than an eagerly evaluated value:
+
+```javascript
+// Defined outside the component (allocated only once in memory)
+function init(key) {
+  const raw = localStorage.getItem(key);
+  return raw ? JSON.parse(raw) : { theme: 'light', zoom: 100 };
+}
+
+function Dashboard() {
+  // ✅ GOOD: 'init' is only called ONCE during the initial mount!
+  const [state, dispatch] = useReducer(reducer, 'user_settings', init);
+  // ...
+}
+```
+
+##### Under the Hood in React's Fiber Engine
+
+```text
+  PHASE 1: MOUNT (First Render)
+  -----------------------------
+  React checks: "Is there a 3rd argument (init)?"
+    - YES: React invokes init(initialArg) -> init('user_settings')
+    - Runs localStorage.getItem & JSON.parse EXACTLY ONCE.
+    - Stores the returned state in Fiber node memory.
+
+  PHASE 2: RE-RENDER (Subsequent Renders)
+  --------------------------------------
+  React checks Fiber memory: "State already exists!"
+    - React COMPLETELY SKIPS calling init().
+    - 0 ms wasted. No blocking disk I/O, no JSON parsing.
+```
+
+##### Why `useReducer` Uses 3 Arguments vs `useState`'s 1
+
+| Hook | Lazy Syntax | Why? |
+| :--- | :--- | :--- |
+| **`useState`** | `useState(() => expensiveCompute())` | Takes only one argument (`initialState`). If you pass a function, React treats it as an initializer. |
+| **`useReducer`** | `useReducer(reducer, initialArg, init)` | The 2nd argument (`initialArg`) was already designed to accept static values or props. To avoid ambiguous function signatures, React reserved the **3rd argument** (`init`) as the initializer and passes `initialArg` directly to it: `init(initialArg)`. |
+
+##### What Happens to the 2nd Argument (`initialArg`) When `init` is Present?
+
+A common point of confusion is: *"If the 3rd argument `init` calculates the initial state, what is the 2nd argument doing (like the `'user_settings'` string)?"*
+
+When `init` is supplied, **the 2nd argument changes its role completely**:
+* **Without `init`:** `useReducer(reducer, initialState)` ➔ The 2nd argument **is** the initial state object itself.
+* **With `init`:** `useReducer(reducer, initialArg, init)` ➔ The 2nd argument is NOT the state. It is the **raw input argument** that React forwards directly into your `init` function on mount:
+
+```text
+  React executes internally on mount:
+  initialState = init(initialArg)
+```
+
+###### Why This Parameter Design is Powerful:
+
+1. **Keeps the `init` Function Pure and Reusable:**
+   Instead of hardcoding a storage key or user ID inside the `init` function, `init` can live outside all components as a pure, testable utility:
+   ```javascript
+   // Generic helper: declared outside the component, reusable anywhere
+   function loadStorage(storageKey) {
+     const raw = localStorage.getItem(storageKey);
+     return raw ? JSON.parse(raw) : { theme: 'light', zoom: 100 };
+   }
+
+   function Dashboard({ userId }) {
+     // 'user_settings_' + userId is passed as 2nd argument, received as storageKey in loadStorage!
+     const [state, dispatch] = useReducer(reducer, `user_settings_${userId}`, loadStorage);
+   }
+   ```
+
+2. **Passing Component Props as the "Seed" for Initial State:**
+   If the initial state needs to be transformed from a component prop, pass the prop as the 2nd argument:
+   ```javascript
+   function initCounter(startingCount) {
+     return { count: startingCount, history: [startingCount] };
+   }
+
+   function Counter({ initialCount = 0 }) {
+     // initialCount (prop) is passed as 2nd argument -> received by initCounter(startingCount)
+     const [state, dispatch] = useReducer(counterReducer, initialCount, initCounter);
+   }
+   ```
+
+3. **What if `init` doesn't need an argument?**
+   If your initialization logic is completely self-contained (e.g., generating a random board or large grid), pass `undefined` or `null` as the 2nd argument:
+   ```javascript
+   const [grid, dispatch] = useReducer(gridReducer, null, () => generateComplexGrid(50));
+   ```
+
+##### Added Superpower: Clean State Resets
+
+Passing an `init` function also gives you an elegant, DRY way to **reset** state back to its initial value inside your reducer without duplicating code:
+
+```javascript
+function reducer(state, action) {
+  switch (action.type) {
+    case 'UPDATE_SETTING':
+      return { ...state, ...action.payload };
+
+    case 'RESET':
+      // 💡 Re-run init to reset state back to fresh initial values!
+      return init(action.payload); // e.g. init('user_settings')
+
+    default:
+      return state;
+  }
+}
 ```
 
 ### 5. Real-World Usage Example: The Data Fetching State Machine
